@@ -1,14 +1,25 @@
 import Link from "next/link";
+import {
+  ShuttlecockIcon,
+  CalendarCheck,
+  Wallet,
+  Calendar,
+  Sparkles,
+  TrendingUp,
+  Trophy,
+  Brain,
+  Video
+} from "@/components/icons";
 
 const features = [
-  { icon: "🏸", title: "Members & Attendance", body: "QR check-ins, GPS validation, late rules, monthly matrices and automated absence sweeps." },
-  { icon: "💰", title: "Wallets & Penalties", body: "Append-only ledgers per member. Automatic lassi fines for absences, losses and walkovers." },
-  { icon: "🏟️", title: "Courts & Bookings", body: "Live court occupancy, hourly booking with wallet payments, cancellation windows." },
-  { icon: "🤖", title: "AI Matchmaking", body: "Balanced doubles generated from ratings, partner fairness and fatigue — with explanations." },
-  { icon: "📈", title: "Elo Ratings & Leaderboards", body: "Doubles-aware Elo with margin multipliers across 8 leaderboard categories and periods." },
-  { icon: "🏆", title: "Tournaments", body: "Knockout brackets up to 32 players with standard seeding, byes and entry fees." },
-  { icon: "🧠", title: "AI Coaching", body: "Weekly insights on form, deciding sets and partnerships built from your real match data." },
-  { icon: "🎥", title: "Video Analysis", body: "Upload rally footage for deterministic pose analysis: footwork, shot accuracy, court coverage." }
+  { icon: CalendarCheck, title: "Members & Attendance", body: "QR check-ins, GPS validation, late rules, monthly matrices and automated absence sweeps." },
+  { icon: Wallet, title: "Wallets & Penalties", body: "Append-only ledgers per member. Automatic fines for absences, losses and walkovers." },
+  { icon: Calendar, title: "Courts & Bookings", body: "Live court occupancy, hourly booking with wallet payments, cancellation windows." },
+  { icon: Sparkles, title: "AI Matchmaking", body: "Balanced doubles generated from ratings, partner fairness and fatigue — with explanations." },
+  { icon: TrendingUp, title: "Elo Ratings & Leaderboards", body: "Doubles-aware Elo with margin multipliers across 8 leaderboard categories and periods." },
+  { icon: Trophy, title: "Tournaments", body: "Knockout brackets up to 32 players with standard seeding, byes and entry fees." },
+  { icon: Brain, title: "AI Coaching", body: "Weekly insights on form, deciding sets and partnerships built from your real match data." },
+  { icon: Video, title: "Video Analysis", body: "Upload rally footage for deterministic pose analysis: footwork, shot accuracy, court coverage." }
 ];
 
 export default function LandingPage() {
@@ -17,7 +28,7 @@ export default function LandingPage() {
       <div className="pointer-events-none absolute -top-40 left-1/2 h-[480px] w-[720px] -translate-x-1/2 rounded-full bg-primary/10 blur-3xl" />
       <nav className="container-page flex h-16 items-center justify-between">
         <div className="flex items-center gap-2 font-bold">
-          <span className="text-xl">🏸</span> Badminton Club OS
+          <ShuttlecockIcon className="h-6 w-6 text-primary" /> Badminton Club OS
         </div>
         <div className="flex items-center gap-2">
           <Link href="/login" className="rounded-lg px-4 py-2 text-sm font-medium hover:bg-muted">
@@ -60,13 +71,18 @@ export default function LandingPage() {
       </section>
 
       <section className="container-page grid gap-4 pb-24 sm:grid-cols-2 lg:grid-cols-4">
-        {features.map((f) => (
-          <div key={f.title} className="rounded-2xl border bg-card p-5 shadow-sm">
-            <div className="text-2xl">{f.icon}</div>
-            <h3 className="mt-3 font-semibold">{f.title}</h3>
-            <p className="mt-1 text-sm text-muted-foreground">{f.body}</p>
-          </div>
-        ))}
+        {features.map((f) => {
+          const Icon = f.icon;
+          return (
+            <div key={f.title} className="rounded-2xl border bg-card p-5 shadow-sm">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                <Icon className="h-5 w-5" />
+              </div>
+              <h3 className="mt-3 font-semibold">{f.title}</h3>
+              <p className="mt-1 text-sm text-muted-foreground">{f.body}</p>
+            </div>
+          );
+        })}
       </section>
 
       <section className="border-t bg-card/50">

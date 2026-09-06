@@ -7,6 +7,7 @@ import { useSession } from "@/components/session";
 import { api } from "@/lib/client";
 import { Avatar, Badge, Button, Card, Input, Spinner } from "@/components/ui";
 import { Dialog, useToast } from "@/components/ui";
+import { Trophy } from "@/components/icons";
 
 interface TmMatch {
   id: string;
@@ -154,8 +155,11 @@ function BracketInner() {
 
       {t.winnerUserId && (
         <Card className="p-4 text-center">
-          🏆 <b>{nameOf(t.winnerUserId)}</b> wins
-          {t.runnerUpUserId ? <> · runner-up {nameOf(t.runnerUpUserId)}</> : null}
+          <div className="flex items-center justify-center gap-2">
+            <Trophy className="h-5 w-5 text-amber-500" />
+            <span><b>{nameOf(t.winnerUserId)}</b> wins</span>
+            {t.runnerUpUserId ? <span className="text-muted-foreground">· runner-up {nameOf(t.runnerUpUserId)}</span> : null}
+          </div>
         </Card>
       )}
 

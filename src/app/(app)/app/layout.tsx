@@ -7,6 +7,26 @@ import { SessionProvider, useSession } from "@/components/session";
 import { api } from "@/lib/client";
 import { Avatar, Badge, Button, Spinner } from "@/components/ui";
 import { Dialog } from "@/components/ui";
+import {
+  ShuttlecockIcon,
+  LayoutDashboard,
+  Users,
+  CalendarCheck,
+  Sparkles,
+  TrendingUp,
+  Calendar,
+  Wallet,
+  Scale,
+  Trophy,
+  Brain,
+  Video,
+  Settings,
+  Shield,
+  Sun,
+  Moon,
+  Bell as BellIcon,
+  RefreshCw
+} from "@/components/icons";
 
 interface NotificationItem {
   id: string;
@@ -34,25 +54,25 @@ function ThemeToggle() {
         } catch {}
       }}
     >
-      {dark ? "☀️" : "🌙"}
+      {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
     </Button>
   );
 }
 
 const NAV = [
-  { href: "/app", label: "Dashboard", icon: "🏠", everyone: true },
-  { href: "/app/members", label: "Members", icon: "👥", staff: true },
-  { href: "/app/attendance", label: "Attendance", icon: "✅", everyone: true },
-  { href: "/app/matches", label: "Matches", icon: "🏸", everyone: true },
-  { href: "/app/matchmaking", label: "Matchmaking", icon: "🤖", everyone: true },
-  { href: "/app/leaderboards", label: "Leaderboards", icon: "📈", everyone: true },
-  { href: "/app/courts", label: "Courts & Bookings", icon: "🏟️", everyone: true },
-  { href: "/app/wallet", label: "Wallet", icon: "💰", everyone: true },
-  { href: "/app/penalties", label: "Penalties", icon: "⚖️", everyone: true },
-  { href: "/app/tournaments", label: "Tournaments", icon: "🏆", everyone: true },
-  { href: "/app/coaching", label: "AI Coaching", icon: "🧠", everyone: true },
-  { href: "/app/videos", label: "Video Analysis", icon: "🎥", everyone: true },
-  { href: "/app/settings", label: "Settings", icon: "⚙️", everyone: true }
+  { href: "/app", label: "Dashboard", icon: LayoutDashboard, everyone: true },
+  { href: "/app/members", label: "Members", icon: Users, staff: true },
+  { href: "/app/attendance", label: "Attendance", icon: CalendarCheck, everyone: true },
+  { href: "/app/matches", label: "Matches", icon: ShuttlecockIcon, everyone: true },
+  { href: "/app/matchmaking", label: "Matchmaking", icon: Sparkles, everyone: true },
+  { href: "/app/leaderboards", label: "Leaderboards", icon: TrendingUp, everyone: true },
+  { href: "/app/courts", label: "Courts & Bookings", icon: Calendar, everyone: true },
+  { href: "/app/wallet", label: "Wallet", icon: Wallet, everyone: true },
+  { href: "/app/penalties", label: "Penalties", icon: Scale, everyone: true },
+  { href: "/app/tournaments", label: "Tournaments", icon: Trophy, everyone: true },
+  { href: "/app/coaching", label: "AI Coaching", icon: Brain, everyone: true },
+  { href: "/app/videos", label: "Video Analysis", icon: Video, everyone: true },
+  { href: "/app/settings", label: "Settings", icon: Settings, everyone: true }
 ];
 
 function Bell() {
@@ -82,7 +102,7 @@ function Bell() {
   return (
     <div className="relative">
       <Button variant="ghost" size="icon" aria-label="Notifications" onClick={() => setOpen(true)}>
-        🔔
+        <BellIcon className="h-4 w-4" />
         {unread > 0 && (
           <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground">
             {unread > 9 ? "9+" : unread}
@@ -145,7 +165,7 @@ function Shell({ children }: { children: React.ReactNode }) {
     <div className="flex min-h-screen">
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col border-r bg-card lg:flex">
         <Link href="/app" className="flex h-16 items-center gap-2 px-5 font-bold">
-          <span className="text-xl">🏸</span> Club OS
+          <ShuttlecockIcon className="h-5 w-5 text-primary" /> Club OS
         </Link>
 
         <button
@@ -156,12 +176,13 @@ function Shell({ children }: { children: React.ReactNode }) {
             <span className="truncate font-semibold">{activeMembership?.club.name ?? "No club"}</span>
             <span className="text-[11px] capitalize text-muted-foreground">{activeMembership?.role.toLowerCase() ?? "—"}</span>
           </span>
-          <span className="text-muted-foreground">⇄</span>
+          <RefreshCw className="h-3.5 w-3.5 text-muted-foreground" />
         </button>
 
         <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 pb-4">
           {NAV.filter((n) => (n.staff ? isStaff : n.everyone)).map((item) => {
             const active = pathname === item.href || (item.href !== "/app" && pathname.startsWith(item.href));
+            const Icon = item.icon;
             return (
               <Link
                 key={item.href}
@@ -170,7 +191,7 @@ function Shell({ children }: { children: React.ReactNode }) {
                   active ? "bg-primary/10 font-medium text-primary" : "hover:bg-muted"
                 }`}
               >
-                <span>{item.icon}</span> {item.label}
+                <Icon className="h-4 w-4 shrink-0" /> {item.label}
               </Link>
             );
           })}
@@ -181,7 +202,7 @@ function Shell({ children }: { children: React.ReactNode }) {
                 pathname.startsWith("/admin") ? "bg-primary/10 font-medium text-primary" : "hover:bg-muted"
               }`}
             >
-              🛡️ Platform admin
+              <Shield className="h-4 w-4" /> Platform admin
             </Link>
           )}
         </nav>
@@ -203,7 +224,7 @@ function Shell({ children }: { children: React.ReactNode }) {
       <div className="flex min-h-screen w-full flex-col lg:pl-60">
         <header className="sticky top-0 z-20 flex h-14 items-center justify-between border-b bg-background/80 px-4 backdrop-blur sm:px-6">
           <button onClick={() => setSwitcherOpen(true)} className="flex items-center gap-2 text-sm font-semibold lg:hidden">
-            <span className="text-lg">🏸</span>
+            <ShuttlecockIcon className="h-4 w-4 text-primary" />
             <span className="max-w-[140px] truncate">{activeMembership?.club.name ?? "Club OS"}</span>
           </button>
           <div className="hidden lg:block" />
@@ -225,17 +246,26 @@ function Shell({ children }: { children: React.ReactNode }) {
 
         <nav className="sticky bottom-0 z-20 flex justify-around border-t bg-card/90 py-1.5 backdrop-blur lg:hidden">
           {[
-            { href: "/app", label: "Home", icon: "🏠" },
-            { href: "/app/attendance", label: "Check-in", icon: "✅" },
-            { href: "/app/matches", label: "Matches", icon: "🏸" },
-            { href: "/app/leaderboards", label: "Ranks", icon: "📈" },
-            { href: "/app/wallet", label: "Wallet", icon: "💰" }
-          ].map((t) => (
-            <Link key={t.href} href={t.href} className={`flex flex-col items-center rounded-lg px-3 py-1 text-[10px] ${pathname === t.href ? "text-primary" : "text-muted-foreground"}`}>
-              <span className="text-base">{t.icon}</span>
-              {t.label}
-            </Link>
-          ))}
+            { href: "/app", label: "Home", icon: LayoutDashboard },
+            { href: "/app/attendance", label: "Check-in", icon: CalendarCheck },
+            { href: "/app/matches", label: "Matches", icon: ShuttlecockIcon },
+            { href: "/app/leaderboards", label: "Ranks", icon: TrendingUp },
+            { href: "/app/wallet", label: "Wallet", icon: Wallet }
+          ].map((t) => {
+            const Icon = t.icon;
+            return (
+              <Link
+                key={t.href}
+                href={t.href}
+                className={`flex flex-col items-center rounded-lg px-3 py-1 text-[10px] ${
+                  pathname === t.href ? "text-primary font-medium" : "text-muted-foreground"
+                }`}
+              >
+                <Icon className="h-4 w-4 mb-0.5" />
+                {t.label}
+              </Link>
+            );
+          })}
         </nav>
       </div>
 

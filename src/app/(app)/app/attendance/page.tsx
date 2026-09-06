@@ -5,6 +5,7 @@ import { SessionProvider, useSession } from "@/components/session";
 import { api } from "@/lib/client";
 import { Avatar, Badge, Button, Card, Input, Spinner } from "@/components/ui";
 import { Dialog, Tabs, useToast } from "@/components/ui";
+import { CheckSquare } from "@/components/icons";
 
 interface RosterRow {
   userId: string;
@@ -156,8 +157,8 @@ function AttendanceInner() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold">Attendance</h1>
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={selfCheckIn}>
-            ✅ Check in
+          <Button variant="outline" onClick={selfCheckIn} className="inline-flex items-center gap-1.5">
+            <CheckSquare className="h-4 w-4 text-primary" /> Check in
           </Button>
           {isStaff && (
             <>
@@ -269,8 +270,12 @@ function AttendanceInner() {
               ))}
             </tbody>
           </table>
-          <div className="mt-3 flex gap-3 text-[10px] text-muted-foreground">
-            <span>🟩 Present</span><span>🟨 Late</span><span>🟥 Absent</span><span>🟦 Excused/Guest</span><span>⬜ No record</span>
+          <div className="mt-3 flex flex-wrap gap-4 text-xs text-muted-foreground">
+            <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-emerald-500" /> Present</span>
+            <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-amber-400" /> Late</span>
+            <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-rose-500" /> Absent</span>
+            <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-sky-400" /> Excused / Guest</span>
+            <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm border bg-muted" /> No record</span>
           </div>
         </Card>
       )}

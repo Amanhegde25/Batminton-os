@@ -7,6 +7,7 @@ import { useSession } from "@/components/session";
 import { api } from "@/lib/client";
 import { Avatar, Badge, Button, Card, Input, Spinner } from "@/components/ui";
 import { useToast } from "@/components/ui";
+import { Trophy, Flag } from "@/components/icons";
 
 interface SetScore {
   setNumber: number;
@@ -144,8 +145,9 @@ export default function MatchDetailPage() {
         <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4">
           {[0, 1].map((idx) => (
             <div key={idx} className={idx === 1 ? "order-3 text-right" : ""}>
-              <p className={`font-semibold ${match.winnerTeamIndex === idx && match.status !== "SCHEDULED" ? "text-emerald-600" : ""}`}>
-                {teamName(idx)} {match.winnerTeamIndex === idx && "🏆"}
+              <p className={`inline-flex items-center gap-1.5 font-semibold ${match.winnerTeamIndex === idx && match.status !== "SCHEDULED" ? "text-emerald-600" : ""}`}>
+                <span>{teamName(idx)}</span>
+                {match.winnerTeamIndex === idx && <Trophy className="h-4 w-4 text-amber-500" />}
               </p>
               <div className={`mt-2 flex gap-1.5 ${idx === 1 ? "justify-end" : ""}`}>
                 {match.teams[idx].players.map((p) => (
@@ -240,8 +242,8 @@ export default function MatchDetailPage() {
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">Rules: win at 21+ with 2-point lead; 29-29 plays to 30.</p>
-          <Button className="w-full" disabled={busy} onClick={complete}>
-            🏁 Complete match ({setsWon(0)}–{setsWon(1)})
+          <Button className="w-full inline-flex items-center justify-center gap-2" disabled={busy} onClick={complete}>
+            <Flag className="h-4 w-4" /> Complete match ({setsWon(0)}–{setsWon(1)})
           </Button>
         </Card>
       )}

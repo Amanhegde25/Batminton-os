@@ -5,6 +5,7 @@ import { useSession } from "@/components/session";
 import { api } from "@/lib/client";
 import { Badge, Button, Card, Field, Input, Select, Spinner, StatCard } from "@/components/ui";
 import { Dialog, Table, Tabs, Td, useToast } from "@/components/ui";
+import { ShieldCheck } from "@/components/icons";
 
 interface PenaltyRow {
   id: string;
@@ -151,7 +152,10 @@ function PenaltiesInner() {
             {list.items.length === 0 && (
               <tr>
                 <Td colSpan={isStaff ? 7 : 6} className="py-10 text-center text-muted-foreground">
-                  No penalties — a disciplined club! 🎉
+                  <div className="flex flex-col items-center justify-center gap-1.5">
+                    <ShieldCheck className="h-6 w-6 text-emerald-500" />
+                    <span>No penalties — a disciplined club!</span>
+                  </div>
                 </Td>
               </tr>
             )}

@@ -5,6 +5,7 @@ import { useSession } from "@/components/session";
 import { api } from "@/lib/client";
 import { Badge, Button, Card, Select, Spinner } from "@/components/ui";
 import { useToast } from "@/components/ui";
+import { Brain, Lock, RefreshCw } from "@/components/icons";
 
 interface Insight {
   headline: string;
@@ -82,11 +83,13 @@ function CoachingInner() {
       {node}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold">🧠 AI Coaching</h1>
+          <h1 className="flex items-center gap-2 text-2xl font-bold">
+            <Brain className="h-6 w-6 text-primary" /> AI Coaching
+          </h1>
           <p className="text-sm text-muted-foreground">Weekly insights built from your real match and attendance data.</p>
         </div>
-        <Button onClick={regenerate} disabled={busy || loading}>
-          ↻ Regenerate
+        <Button onClick={regenerate} disabled={busy || loading} className="inline-flex items-center gap-1.5">
+          <RefreshCw className={`h-4 w-4 ${busy || loading ? "animate-spin" : ""}`} /> Regenerate
         </Button>
       </div>
 
@@ -109,7 +112,12 @@ function CoachingInner() {
         </Select>
       )}
 
-      {locked && <Card className="p-10 text-center text-sm text-muted-foreground">🔒 {locked}</Card>}
+      {locked && (
+        <Card className="flex flex-col items-center justify-center p-10 text-center text-sm text-muted-foreground">
+          <Lock className="mb-2 h-6 w-6 text-muted-foreground/80" />
+          {locked}
+        </Card>
+      )}
 
       {loading && !data ? (
         <div className="flex justify-center py-16">

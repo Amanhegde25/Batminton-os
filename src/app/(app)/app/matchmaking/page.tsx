@@ -5,6 +5,7 @@ import { useSession } from "@/components/session";
 import { api } from "@/lib/client";
 import { Avatar, Badge, Button, Card, Spinner } from "@/components/ui";
 import { useToast } from "@/components/ui";
+import { Sparkles, RefreshCw } from "@/components/icons";
 
 interface SidePlayer {
   id: string;
@@ -86,12 +87,12 @@ function MatchmakingInner() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={() => void load()} disabled={loading}>
-            ↻ Regenerate
+          <Button variant="outline" onClick={() => void load()} disabled={loading} className="inline-flex items-center gap-1.5">
+            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /> Regenerate
           </Button>
           {canApply && (
-            <Button onClick={apply} disabled={busy || !preview?.assignments.length}>
-              🚀 Apply & schedule
+            <Button onClick={apply} disabled={busy || !preview?.assignments.length} className="inline-flex items-center gap-1.5">
+              <Sparkles className="h-4 w-4" /> Apply & schedule
             </Button>
           )}
         </div>

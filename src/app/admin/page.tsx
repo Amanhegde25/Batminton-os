@@ -6,6 +6,7 @@ import { SessionProvider } from "@/components/session";
 import { api } from "@/lib/client";
 import { Badge, Button, Card, Select, Spinner, StatCard } from "@/components/ui";
 import { Table, Td, useToast } from "@/components/ui";
+import { Shield, ArrowLeft } from "@/components/icons";
 
 interface PlatformData {
   totals: { clubs: number; users: number; matches: number; activeMembers: number };
@@ -65,7 +66,9 @@ function AdminInner() {
   if (denied) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-3 text-center">
-        <p className="text-4xl">🛡️</p>
+        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-destructive/10 text-destructive">
+          <Shield className="h-8 w-8" />
+        </div>
         <h1 className="text-xl font-semibold">Platform admin access required</h1>
         <p className="text-sm text-muted-foreground">Sign in as the super admin account to view this page.</p>
         <Link href="/login">
@@ -80,10 +83,12 @@ function AdminInner() {
       {node}
       <div className="flex items-center justify-between">
         <div>
-          <Link href="/app" className="text-sm text-primary hover:underline">
-            ← Back to app
+          <Link href="/app" className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline">
+            <ArrowLeft className="h-4 w-4" /> Back to app
           </Link>
-          <h1 className="text-2xl font-bold">🛡️ Platform admin</h1>
+          <h1 className="flex items-center gap-2 text-2xl font-bold">
+            <Shield className="h-6 w-6 text-primary" /> Platform admin
+          </h1>
         </div>
       </div>
 
