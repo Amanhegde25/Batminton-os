@@ -6,6 +6,7 @@ import { api } from "@/lib/client";
 import { Badge, Button, Card, Spinner } from "@/components/ui";
 import { EmptyState } from "@/components/ui";
 import { useToast } from "@/components/ui";
+import { Video, Lock, Plus, Lightbulb } from "@/components/icons";
 
 interface VideoRow {
   id: string;
@@ -104,7 +105,8 @@ function VideosInner() {
   if (locked) {
     return (
       <EmptyState
-        title="🔒 Video analysis requires PREMIUM"
+        icon={<Lock className="h-8 w-8 text-muted-foreground/80" />}
+        title="Video analysis requires PREMIUM"
         body="Upgrade the club plan (or ask a platform admin) to unlock AI-powered rally analysis."
       />
     );
@@ -115,7 +117,9 @@ function VideosInner() {
       {node}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold">🎥 Video Analysis</h1>
+          <h1 className="flex items-center gap-2 text-2xl font-bold">
+            <Video className="h-6 w-6 text-primary" /> Video Analysis
+          </h1>
           <p className="text-sm text-muted-foreground">Upload rally footage — get pose-based insights on form and coverage.</p>
         </div>
         <div>
@@ -126,8 +130,9 @@ function VideosInner() {
             className="hidden"
             onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])}
           />
-          <Button onClick={() => fileRef.current?.click()} disabled={uploading}>
-            {uploading ? "Uploading…" : "⬆ Upload video"}
+          <Button onClick={() => fileRef.current?.click()} disabled={uploading} className="inline-flex items-center gap-1.5">
+            <Plus className="h-4 w-4" />
+            {uploading ? "Uploading…" : "Upload video"}
           </Button>
         </div>
       </div>
@@ -159,7 +164,10 @@ function VideosInner() {
                   <Metric label="Smash speed" value={Math.round(detail[v.id].smashSpeedKmh)} suffix="km/h" />
                   <div className="col-span-full mt-1 space-y-1 text-sm">
                     {(detail[v.id].insights ?? []).map((ins, i) => (
-                      <p key={i}>💡 {ins}</p>
+                      <p key={i} className="flex items-start gap-2">
+                        <Lightbulb className="h-4 w-4 shrink-0 text-amber-500 mt-0.5" />
+                        <span>{ins}</span>
+                      </p>
                     ))}
                   </div>
                 </div>

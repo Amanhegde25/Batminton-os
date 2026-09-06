@@ -7,9 +7,9 @@ import { createClub, listPublicClubs } from "@/server/services/clubs";
 import { prisma } from "@/server/db";
 
 export const GET = handler(async (req) => {
-  await requireUser(await currentUser());
+  const user = await requireUser(await currentUser());
   const q = new URL(req.url).searchParams.get("q") ?? undefined;
-  return ok(await listPublicClubs(q || undefined));
+  return ok(await listPublicClubs(q || undefined, user.id));
 });
 
 const createSchema = z.object({

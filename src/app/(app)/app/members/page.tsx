@@ -7,6 +7,7 @@ import { Avatar, Badge, Button, Card, Field, Input, Select, Spinner } from "@/co
 import { Dialog, Table, Tabs, Td, useToast } from "@/components/ui";
 
 interface MemberRow {
+  id: string;
   userId: string;
   name: string;
   email: string;
@@ -59,11 +60,11 @@ function MembersInner() {
     void load();
   }
 
-  async function decide(memberId: string, approve: boolean) {
+  async function decide(membershipId: string, approve: boolean) {
     try {
       await api(`/clubs/${activeClubId}/members`, {
         method: "POST",
-        json: { memberId, action: approve ? "approve" : "reject" }
+        json: { memberId: membershipId, action: approve ? "approve" : "reject" }
       });
       toast(approve ? "Approved" : "Rejected");
       void load();
@@ -161,10 +162,10 @@ function MembersInner() {
                 </div>
               </div>
               <div className="flex gap-2">
-                <Button size="sm" variant="outline" onClick={() => decide(r.userId, false)}>
+                <Button size="sm" variant="outline" onClick={() => decide(r.id, false)}>
                   Reject
                 </Button>
-                <Button size="sm" onClick={() => decide(r.userId, true)}>
+                <Button size="sm" onClick={() => decide(r.id, true)}>
                   Approve
                 </Button>
               </div>

@@ -88,10 +88,19 @@ export function Avatar({ name, src, size = 36 }: { name: string; src?: string | 
   );
 }
 
-export function EmptyState({ title, body }: { title: string; body?: string }) {
+export function EmptyState({
+  title,
+  body,
+  icon
+}: {
+  title: React.ReactNode;
+  body?: string;
+  icon?: React.ReactNode;
+}) {
   return (
-    <div className="flex flex-col items-center justify-center gap-1 rounded-xl border border-dashed py-12 text-center">
-      <p className="font-medium">{title}</p>
+    <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed py-12 text-center">
+      {icon && <div className="text-muted-foreground">{icon}</div>}
+      <div className="font-medium">{title}</div>
       {body && <p className="max-w-sm text-sm text-muted-foreground">{body}</p>}
     </div>
   );

@@ -30,7 +30,15 @@ export const POST = handler(async (req, { params }) => {
   if (action === "approve" || action === "reject") {
     await requireStaff(id, user);
     const body = await parseBody(req, z.object({ memberId: z.string(), action: z.string().optional() }));
-    return ok(await approveMembership(id, user, body.memberId, action === "approve"));
+    let resolvedMemberId = body.memberId;
+    // Fallback: if memberId is actually a userId, look up the pending membership
+    const { prisma } = await import("@/server/db");
+    const direct = await prisma.clubMember.findFirst({ where: { id: resolvedMemberId, clubId: id } });
+    if (!direct) {
+      const byUser = await prisma.clubMember.findFirst({ where: { userId: resolvedMemberId, clubId: id, status: "PENDING" } });
+      if (byUser) resolvedMemberId = byUser.id;
+    }
+    return ok(await approveMembership(id, user, resolvedMemberId, action === "approve"));
   }
 
   const ctx = await requireManagerOrCoach(id, user);

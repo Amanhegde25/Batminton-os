@@ -141,8 +141,8 @@ export async function getClubForUser(clubId: string) {
   return club;
 }
 
-export async function listPublicClubs(q?: string) {
-  return prisma.club.findMany({
+export async function listPublicClubs(q?: string, userId?: string) {
+  const clubs = await prisma.club.findMany({
     where: { deletedAt: null, isPublic: true, ...(q ? { OR: [{ name: { contains: q } }, { city: { contains: q } }] } : {}) },
     select: {
       id: true,
@@ -151,9 +151,32 @@ export async function listPublicClubs(q?: string) {
       city: true,
       logoUrl: true,
       description: true,
+      subscriptionPlan: true,
       _count: { select: { members: true, courts: true } }
     },
     orderBy: { createdAt: "desc" },
     take: 60
   });
+
+  // Look up the current user's memberships for all returned clubs
+  let membershipMap = new Map<string, { id: string; status: string; role: string }>();
+  if (userId) {
+    const memberships = await prisma.clubMember.findMany({
+      where: { userId, clubId: { in: clubs.map((c) => c.id) } },
+      select: { id: true, clubId: true, status: true, role: true }
+    });
+    membershipMap = new Map(memberships.map((m) => [m.clubId, { id: m.id, status: m.status, role: m.role }]));
+  }
+
+  return clubs.map((c) => ({
+    id: c.id,
+    name: c.name,
+    slug: c.slug,
+    city: c.city,
+    logoUrl: c.logoUrl,
+    description: c.description,
+    subscriptionPlan: c.subscriptionPlan,
+    memberCount: c._count.members,
+    membership: membershipMap.get(c.id) ?? null
+  }));
 }
