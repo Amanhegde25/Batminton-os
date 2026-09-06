@@ -165,8 +165,7 @@ function CreateMatchDialog({
   const [teamB, setTeamB] = useState<string[]>([]);
   const [courtId, setCourtId] = useState("");
   const [busy, setBusy] = useState(false);
-  const { toast } = useToast();
-  void toast;
+  const { toast, node } = useToast();
 
   useEffect(() => {
     if (!open || !clubId) return;
@@ -188,6 +187,7 @@ function CreateMatchDialog({
 
   return (
     <Dialog open={open} onClose={onClose} title="Schedule a match">
+      {node}
       <form
         className="space-y-4"
         onSubmit={async (e) => {

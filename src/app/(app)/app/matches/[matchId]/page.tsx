@@ -30,10 +30,10 @@ interface MatchDetail {
 }
 
 export default function MatchDetailPage() {
-  const params = useParams<{ id: string; matchId: string }>();
-  const clubId = params.id;
+  const params = useParams<{ id?: string; matchId: string }>();
+  const { activeClubId, activeMembership } = useSession();
   const matchId = params.matchId;
-  const { activeMembership } = useSession();
+  const clubId = params.id || activeClubId || "_";
   const [match, setMatch] = useState<MatchDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -44,6 +44,7 @@ export default function MatchDetailPage() {
   const canControl = ["OWNER", "ADMIN", "COACH"].includes(activeMembership?.role ?? "");
 
   const load = useCallback(async () => {
+    if (!matchId) return;
     try {
       setMatch(await api<MatchDetail>(`/clubs/${clubId}/matches/${matchId}`));
     } catch (err) {

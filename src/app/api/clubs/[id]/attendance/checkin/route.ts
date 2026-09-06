@@ -9,13 +9,23 @@ const schema = z.object({
   token: z.string().optional(),
   lat: z.number().optional(),
   lng: z.number().optional(),
-  userId: z.string().optional()
+  userId: z.string().optional(),
+  status: z.enum(["PRESENT", "ABSENT", "LATE", "GUEST", "EXCUSED"]).optional()
 });
 
 export const POST = handler(async (req, { params }) => {
   const user = await requireUser(await currentUser());
   const { id } = await params;
   const input = await parseBody(req, schema);
+  if (input.status) {
+    await requireStaff(id, user);
+    return ok(
+      await attendance.markManual(id, user, {
+        userId: input.userId ?? user.id,
+        status: input.status
+      })
+    );
+  }
   return ok(
     await attendance.checkIn(
       id,

@@ -55,7 +55,7 @@ export default function LandingPage() {
           </Link>
         </div>
         <p className="mt-4 text-xs text-muted-foreground">
-          Demo logins after seeding: player@demo.club / admin@demo.club — password <code>Password123!</code>
+          Demo logins after seeding: <b>admin@bcos.app</b> (<code>Admin@123!</code>) · <b>player100@demo.club</b> / <b>player1@demo.club</b> (<code>Password123!</code>)
         </p>
       </section>
 

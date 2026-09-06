@@ -1,6 +1,7 @@
-import { handler, ok } from "@/lib/api";
+import { handler, ok, parseBody } from "@/lib/api";
+import { z } from "zod";
 import { currentUser } from "@/server/auth/session";
-import { getClubContext, requireUser } from "@/server/rbac";
+import { getClubContext, requireStaff, requireUser } from "@/server/rbac";
 import * as attendance from "@/server/services/attendance";
 
 export const GET = handler(async (req, { params }) => {
@@ -24,4 +25,19 @@ export const GET = handler(async (req, { params }) => {
 
   await getClubContext(id, user);
   return ok(await attendance.rosterForDay(id, url.searchParams.get("date") ?? undefined));
+});
+
+const manualSchema = z.object({
+  userId: z.string(),
+  status: z.enum(["PRESENT", "ABSENT", "LATE", "GUEST", "EXCUSED"]),
+  day: z.string().optional(),
+  note: z.string().optional()
+});
+
+export const POST = handler(async (req, { params }) => {
+  const user = await requireUser(await currentUser());
+  const { id } = await params;
+  await requireStaff(id, user);
+  const input = await parseBody(req, manualSchema);
+  return ok(await attendance.markManual(id, user, input));
 });

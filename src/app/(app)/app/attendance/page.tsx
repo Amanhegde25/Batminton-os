@@ -41,8 +41,26 @@ function AttendanceInner() {
     if (!activeClubId) return;
     setLoading(true);
     try {
-      const data = await api<{ rows: RosterRow[] }>(`/clubs/${activeClubId}/attendance?date=${d}`);
-      setRoster(data.rows);
+      const data = await api<{
+        rows?: RosterRow[];
+        roster?: { member: { userId: string; user: { name: string; photoUrl: string | null } }; record: { status: string | null; method: string | null; createdAt: string } | null }[];
+      }>(`/clubs/${activeClubId}/attendance?date=${d}`);
+      if (Array.isArray(data.rows)) {
+        setRoster(data.rows);
+      } else if (Array.isArray(data.roster)) {
+        setRoster(
+          data.roster.map((r) => ({
+            userId: r.member.userId,
+            name: r.member.user.name,
+            photoUrl: r.member.user.photoUrl,
+            status: r.record?.status ?? null,
+            method: r.record?.method ?? null,
+            checkInTime: r.record?.createdAt ?? null
+          }))
+        );
+      } else {
+        setRoster([]);
+      }
     } catch (err) {
       toast(err instanceof Error ? err.message : "Failed to load roster", "error");
     } finally {
@@ -210,7 +228,7 @@ function AttendanceInner() {
         </>
       )}
 
-      {tab === "month" && matrix && (
+      {tab === "month" && matrix && Array.isArray(matrix.days) && Array.isArray(matrix.rows) && (
         <Card className="overflow-x-auto p-4">
           <table className="text-[11px]">
             <thead>

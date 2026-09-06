@@ -66,7 +66,7 @@ function CourtsInner() {
   useEffect(() => {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeClubId, tab]);
+  }, [activeClubId, tab, date]);
 
   async function book(form: { start: string; end: string; forEmail?: string }) {
     if (!bookCourt || !me) return;

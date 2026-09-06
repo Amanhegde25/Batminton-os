@@ -158,7 +158,7 @@ function VideosInner() {
                   <Metric label="Court coverage" value={detail[v.id].courtCoverage} />
                   <Metric label="Smash speed" value={Math.round(detail[v.id].smashSpeedKmh)} suffix="km/h" />
                   <div className="col-span-full mt-1 space-y-1 text-sm">
-                    {detail[v.id].insights.map((ins, i) => (
+                    {(detail[v.id].insights ?? []).map((ins, i) => (
                       <p key={i}>💡 {ins}</p>
                     ))}
                   </div>

@@ -253,13 +253,15 @@ function AdjustDialog({
           e.preventDefault();
           setBusy(true);
           try {
-            await onSubmit({
-              userId: form.userId,
-              amount: Math.round(Number(form.amount) * 100),
-              type: form.type === "MANUAL_DEBIT" ? "MANUAL_DEBIT" : form.type,
-              description: form.description
-            });
-            setForm({ userId: "", amount: "", type: "MANUAL_CREDIT", description: "" });
+          const rawAmount = Math.round(Number(form.amount) * 100);
+          const amount = form.type === "MANUAL_DEBIT" ? -Math.abs(rawAmount) : Math.abs(rawAmount);
+          await onSubmit({
+            userId: form.userId,
+            amount,
+            type: form.type === "MANUAL_DEBIT" ? "MANUAL_DEBIT" : form.type,
+            description: form.description
+          });
+          setForm({ userId: "", amount: "", type: "MANUAL_CREDIT", description: "" });
           } finally {
             setBusy(false);
           }

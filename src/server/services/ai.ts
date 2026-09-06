@@ -111,11 +111,26 @@ function hash(str: string): number {
 function mockCvResult(id: string) {
   const seed = hash(id);
   const r = (min: number, max: number) => min + (seed % 1000) / 1000 * (max - min) + ((seed >> 3) % 97) / 97 * 2;
+  const rallies = Math.round(r(12, 34));
+  const footwork = Math.round(r(62, 94));
+  const accuracy = Math.round(r(58, 91));
+  const coverage = Math.round(r(60, 95));
+  const smashSpeed = Math.round(r(185, 295));
   return {
     pipeline: "mock-cv-v1",
     note: "Simulated computer-vision output. Configure a real CV/AI provider to replace this stage — see docs/ARCHITECTURE.md.",
+    footworkScore: footwork,
+    shotAccuracy: accuracy,
+    courtCoverage: coverage,
+    smashSpeedKmh: smashSpeed,
+    rallyCount: rallies,
+    insights: [
+      `Maintained ${footwork}% footwork balance with strong base positioning during rallies.`,
+      `Court coverage was optimal in mid-court (${coverage}% coverage efficiency).`,
+      `Smash speed peaked around ${smashSpeed} km/h with consistent overhead mechanics.`
+    ],
     metrics: {
-      ralliesDetected: Math.round(r(12, 34)),
+      ralliesDetected: rallies,
       avgRallyDurationSec: Math.round(r(4.5, 11.2) * 10) / 10,
       smashFrequencyPerRally: Math.round(r(1.1, 3.6) * 10) / 10,
       unforcedErrors: Math.round(r(3, 14)),

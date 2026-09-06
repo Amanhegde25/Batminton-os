@@ -26,13 +26,17 @@ export const POST = handler(async (req, { params }) => {
   return ok(await upsertRule(id, user, input));
 });
 
-const deleteSchema = z.object({ ruleId: z.string() });
+const deleteSchema = z
+  .object({ ruleId: z.string().optional(), id: z.string().optional() })
+  .refine((d) => Boolean(d.ruleId || d.id), { message: "Rule ID is required" });
 
 export const DELETE = handler(async (req, { params }) => {
   const user = await requireUser(await currentUser());
   const { id } = await params;
   await requireStaff(id, user);
-  const parsed = deleteSchema.safeParse(Object.fromEntries(new URL(req.url).searchParams));
+  const searchEntries = Object.fromEntries(new URL(req.url).searchParams);
+  const parsed = deleteSchema.safeParse(searchEntries);
   const input = parsed.success ? parsed.data : await parseBody(req, deleteSchema);
-  return ok(await deleteRule(id, user, input.ruleId));
+  const ruleId = input.ruleId || input.id!;
+  return ok(await deleteRule(id, user, ruleId));
 });

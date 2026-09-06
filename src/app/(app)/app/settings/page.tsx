@@ -7,9 +7,18 @@ import { Badge, Button, Card, Field, Input, Select, Spinner } from "@/components
 import { Table, Tabs, Td, useToast } from "@/components/ui";
 
 interface ClubSettings {
-  attendance: { startMinutes: number; graceMinutes: number; requireQr: boolean; requireGps: boolean };
-  booking: { minMinutes: number; maxHoursPerDay: number; cancellationWindowHours: number; hourlyFee: number };
-  membership: { requireApproval: boolean; allowSelfRegistration: boolean };
+  sport?: string;
+  attendance: {
+    startMinutes: number;
+    graceMinutes: number;
+    gpsRequired: boolean;
+    gpsRadiusMeters: number;
+    selfCheckIn: boolean;
+    autoAbsentPenalty: boolean;
+    minAttendancePct: number;
+  };
+  booking: { cancellationWindowMinutes: number };
+  membership: { monthlyFee: number; autoApprove: boolean };
 }
 
 function SettingsInner() {
@@ -178,8 +187,8 @@ function SettingsInner() {
         <div className="max-w-3xl space-y-4">
           <Card className="space-y-5 p-5">
             <p className="font-semibold">Attendance rules</p>
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-              <Field label="Opens at (min past midnight)">
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+              <Field label="Opens at (min past midnight)" hint="e.g. 1080 = 6:00 PM">
                 <Input
                   type="number"
                   value={settings.attendance.startMinutes}
@@ -193,80 +202,77 @@ function SettingsInner() {
                   onChange={(e) => setSettings({ ...settings, attendance: { ...settings.attendance, graceMinutes: num(e.target.value) } })}
                 />
               </Field>
-              <label className="flex items-end gap-2 pb-2 text-sm">
+              <Field label="GPS radius (meters)">
+                <Input
+                  type="number"
+                  value={settings.attendance.gpsRadiusMeters}
+                  onChange={(e) => setSettings({ ...settings, attendance: { ...settings.attendance, gpsRadiusMeters: num(e.target.value) } })}
+                />
+              </Field>
+            </div>
+            <div className="flex flex-wrap gap-6 text-sm">
+              <label className="flex items-center gap-2">
                 <input
                   type="checkbox"
-                  checked={settings.attendance.requireQr}
-                  onChange={(e) => setSettings({ ...settings, attendance: { ...settings.attendance, requireQr: e.target.checked } })}
+                  checked={settings.attendance.gpsRequired}
+                  onChange={(e) => setSettings({ ...settings, attendance: { ...settings.attendance, gpsRequired: e.target.checked } })}
                 />
-                Require QR
+                Require GPS check-in
               </label>
-              <label className="flex items-end gap-2 pb-2 text-sm">
+              <label className="flex items-center gap-2">
                 <input
                   type="checkbox"
-                  checked={settings.attendance.requireGps}
-                  onChange={(e) => setSettings({ ...settings, attendance: { ...settings.attendance, requireGps: e.target.checked } })}
+                  checked={settings.attendance.selfCheckIn}
+                  onChange={(e) => setSettings({ ...settings, attendance: { ...settings.attendance, selfCheckIn: e.target.checked } })}
                 />
-                Require GPS
+                Allow player self check-in
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={settings.attendance.autoAbsentPenalty}
+                  onChange={(e) => setSettings({ ...settings, attendance: { ...settings.attendance, autoAbsentPenalty: e.target.checked } })}
+                />
+                Auto penalty for absentees on sweep
               </label>
             </div>
 
             <p className="font-semibold">Bookings</p>
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-              <Field label="Min slot (min)">
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+              <Field label="Free cancel window (minutes)">
                 <Input
                   type="number"
-                  value={settings.booking.minMinutes}
-                  onChange={(e) => setSettings({ ...settings, booking: { ...settings.booking, minMinutes: num(e.target.value) } })}
-                />
-              </Field>
-              <Field label="Max hours/day">
-                <Input
-                  type="number"
-                  value={settings.booking.maxHoursPerDay}
-                  onChange={(e) => setSettings({ ...settings, booking: { ...settings.booking, maxHoursPerDay: num(e.target.value) } })}
-                />
-              </Field>
-              <Field label="Free cancel window (h)">
-                <Input
-                  type="number"
-                  value={settings.booking.cancellationWindowHours}
+                  value={settings.booking.cancellationWindowMinutes}
                   onChange={(e) =>
-                    setSettings({ ...settings, booking: { ...settings.booking, cancellationWindowHours: num(e.target.value) } })
+                    setSettings({ ...settings, booking: { ...settings.booking, cancellationWindowMinutes: num(e.target.value) } })
                   }
-                />
-              </Field>
-              <Field label="Default fee ₹/hr">
-                <Input
-                  type="number"
-                  value={Math.round(settings.booking.hourlyFee / 100)}
-                  onChange={(e) => setSettings({ ...settings, booking: { ...settings.booking, hourlyFee: num(e.target.value) * 100 } })}
                 />
               </Field>
             </div>
 
             <p className="font-semibold">Membership</p>
-            <div className="flex gap-6 text-sm">
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={settings.membership.requireApproval}
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+              <Field label="Monthly fee ₹">
+                <Input
+                  type="number"
+                  value={Math.round((settings.membership.monthlyFee || 0) / 100)}
                   onChange={(e) =>
-                    setSettings({ ...settings, membership: { ...settings.membership, requireApproval: e.target.checked } })
+                    setSettings({ ...settings, membership: { ...settings.membership, monthlyFee: num(e.target.value) * 100 } })
                   }
                 />
-                Require approval to join
-              </label>
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={settings.membership.allowSelfRegistration}
-                  onChange={(e) =>
-                    setSettings({ ...settings, membership: { ...settings.membership, allowSelfRegistration: e.target.checked } })
-                  }
-                />
-                Allow self registration
-              </label>
+              </Field>
+              <div className="flex items-end pb-2">
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={settings.membership.autoApprove}
+                    onChange={(e) =>
+                      setSettings({ ...settings, membership: { ...settings.membership, autoApprove: e.target.checked } })
+                    }
+                  />
+                  Auto-approve join requests
+                </label>
+              </div>
             </div>
 
             <Button onClick={saveSettings} disabled={savingSettings}>

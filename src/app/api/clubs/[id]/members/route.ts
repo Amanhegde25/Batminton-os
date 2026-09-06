@@ -8,8 +8,10 @@ export const GET = handler(async (req, { params }) => {
   const user = await requireUser(await currentUser());
   const { id } = await params;
   await requireManagerOrCoach(id, user);
-  const q = new URL(req.url).searchParams.get("q") ?? undefined;
-  return ok(await listMembers(id, q || undefined));
+  const url = new URL(req.url);
+  const q = url.searchParams.get("q") ?? undefined;
+  const status = url.searchParams.get("status") ?? undefined;
+  return ok(await listMembers(id, q || undefined, status || undefined));
 });
 
 const addSchema = z.object({
@@ -21,11 +23,13 @@ const addSchema = z.object({
 export const POST = handler(async (req, { params }) => {
   const user = await requireUser(await currentUser());
   const { id } = await params;
-  const action = new URL(req.url).searchParams.get("action");
+  const url = new URL(req.url);
+  const rawBody = await req.clone().json().catch(() => ({}));
+  const action = url.searchParams.get("action") ?? rawBody.action;
 
   if (action === "approve" || action === "reject") {
     await requireStaff(id, user);
-    const body = await parseBody(req, z.object({ memberId: z.string() }));
+    const body = await parseBody(req, z.object({ memberId: z.string(), action: z.string().optional() }));
     return ok(await approveMembership(id, user, body.memberId, action === "approve"));
   }
 
@@ -37,12 +41,30 @@ export const POST = handler(async (req, { params }) => {
   return ok(await addMember(id, user, input));
 });
 
-const patchSchema = z.object({ memberId: z.string(), role: z.enum(["OWNER", "ADMIN", "COACH", "PLAYER"]) });
+const patchSchema = z
+  .object({
+    memberId: z.string().optional(),
+    userId: z.string().optional(),
+    role: z.enum(["OWNER", "ADMIN", "COACH", "PLAYER"])
+  })
+  .refine((d) => Boolean(d.memberId || d.userId), { message: "Either memberId or userId is required" });
 
 export const PATCH = handler(async (req, { params }) => {
   const user = await requireUser(await currentUser());
   const { id } = await params;
   await requireManagerOrCoach(id, user);
   const input = await parseBody(req, patchSchema);
-  return ok(await changeRole(id, user, input.memberId, input.role));
+  let targetMemberId = input.memberId;
+  if (!targetMemberId && input.userId) {
+    const { prisma } = await import("@/server/db");
+    const mem = await prisma.clubMember.findUnique({
+      where: { clubId_userId: { clubId: id, userId: input.userId } }
+    });
+    if (mem) targetMemberId = mem.id;
+  }
+  if (!targetMemberId) {
+    const { ApiError } = await import("@/lib/api");
+    throw ApiError.notFound("Member not found");
+  }
+  return ok(await changeRole(id, user, targetMemberId, input.role));
 });

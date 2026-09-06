@@ -5,13 +5,18 @@ import { audit } from "./audit";
 import { notify } from "./notifications";
 import type { SessionUser } from "@/server/auth/types";
 
-export async function listMembers(clubId: string, q?: string) {
+export async function listMembers(clubId: string, q?: string, status?: string) {
+  const where: any = { clubId };
+  if (status && status !== "ALL") {
+    where.status = status;
+  } else {
+    where.status = { not: "REMOVED" };
+  }
+  if (q) {
+    where.user = { OR: [{ name: { contains: q } }, { email: { contains: q } }] };
+  }
   const members = await prisma.clubMember.findMany({
-    where: {
-      clubId,
-      status: { not: "REMOVED" },
-      ...(q ? { user: { OR: [{ name: { contains: q } }, { email: { contains: q } }] } } : {})
-    },
+    where,
     include: {
       user: { select: { id: true, name: true, email: true, mobile: true, photoUrl: true, skillLevel: true } }
     },
@@ -25,12 +30,20 @@ export async function listMembers(clubId: string, q?: string) {
   const walletMap = new Map(wallets.map((w) => [w.userId, w]));
   return members.map((m) => ({
     id: m.id,
+    userId: m.userId,
+    name: m.user.name,
+    email: m.user.email,
+    mobile: m.user.mobile,
+    photoUrl: m.user.photoUrl,
+    skillLevel: m.user.skillLevel,
     role: m.role,
     status: m.status,
     joinedAt: m.joinedAt,
     user: m.user,
     rating: ratingMap.get(m.userId)?.rating ?? 1000,
-    walletBalance: walletMap.get(m.userId)?.balance ?? 0
+    balance: walletMap.get(m.userId)?.balance ?? 0,
+    walletBalance: walletMap.get(m.userId)?.balance ?? 0,
+    attendanceRate: 100
   }));
 }
 

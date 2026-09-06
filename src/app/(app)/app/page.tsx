@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -87,10 +87,10 @@ export default function DashboardPage() {
           `/clubs/${activeClubId}/attendance`
         );
         setCheckedIn(
-          roster.roster.some(
+          roster?.roster?.some(
             (row) =>
-              row.member.userId === me.id && row.record != null && ATTENDED.includes(row.record.status)
-          )
+              row.member?.userId === me.id && row.record != null && ATTENDED.includes(row.record.status)
+          ) ?? false
         );
       } catch {}
       if (["OWNER", "ADMIN", "COACH"].includes(activeMembership?.role ?? "")) {

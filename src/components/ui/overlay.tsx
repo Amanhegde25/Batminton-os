@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Button } from "./kit";
+import { X } from "@/components/icons";
 
 export function Tabs({
   tabs,
@@ -55,7 +56,7 @@ export function Dialog({
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold">{title}</h2>
           <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close">
-            ✕
+            <X className="h-4 w-4" />
           </Button>
         </div>
         {children}

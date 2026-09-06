@@ -150,6 +150,17 @@ export async function rosterForDay(clubId: string, dayInput?: string) {
       member: m,
       record: byUser.get(m.userId) ?? null
     })),
+    rows: members.map((m) => {
+      const rec = byUser.get(m.userId);
+      return {
+        userId: m.userId,
+        name: m.user.name,
+        photoUrl: m.user.photoUrl,
+        status: rec?.status ?? null,
+        method: rec?.method ?? null,
+        checkInTime: rec?.createdAt ? rec.createdAt.toISOString() : null
+      };
+    }),
     guests: records.filter((r) => r.status === "GUEST")
   };
 }
@@ -158,13 +169,44 @@ export async function monthMatrix(clubId: string, month: string) {
   const [y, m] = month.split("-").map((x) => parseInt(x, 10));
   const from = new Date(y, m - 1, 1);
   const to = new Date(y, m, 1);
-  const days = Math.floor((to.getTime() - from.getTime()) / 86400000);
-  const records = await prisma.attendanceRecord.findMany({
-    where: { clubId, createdAt: { gte: from, lt: to } },
-    orderBy: { day: "asc" }
-  });
-  const activeMembers = await prisma.clubMember.count({ where: { clubId, status: "ACTIVE" } });
-  return { month, days, activeMembers, records };
+  const daysInMonth = Math.round((to.getTime() - from.getTime()) / 86400000);
+
+  const dayStrings: string[] = [];
+  for (let d = 1; d <= daysInMonth; d++) {
+    dayStrings.push(`${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`);
+  }
+
+  const [members, records] = await Promise.all([
+    prisma.clubMember.findMany({
+      where: { clubId, status: "ACTIVE" },
+      include: { user: { select: { id: true, name: true } } },
+      orderBy: { joinedAt: "asc" }
+    }),
+    prisma.attendanceRecord.findMany({
+      where: { clubId, createdAt: { gte: from, lt: to } },
+      orderBy: { day: "asc" }
+    })
+  ]);
+
+  const recordMap = new Map<string, string>();
+  for (const r of records) {
+    recordMap.set(`${r.userId}_${r.day}`, r.status);
+  }
+
+  const rows = members.map((mem) => ({
+    userId: mem.userId,
+    name: mem.user.name,
+    cells: dayStrings.map((d) => recordMap.get(`${mem.userId}_${d}`) ?? null)
+  }));
+
+  return {
+    month,
+    days: dayStrings,
+    daysCount: daysInMonth,
+    activeMembers: members.length,
+    records,
+    rows
+  };
 }
 
 export async function userHistory(clubId: string, userId: string, take = 60) {

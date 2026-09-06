@@ -11,9 +11,18 @@ import {
   startMatch
 } from "@/server/services/matches";
 
+async function resolveClubId(id: string, matchId: string): Promise<string> {
+  if (id && id !== "_" && id !== "undefined") return id;
+  const { prisma } = await import("@/server/db");
+  const m = await prisma.match.findUnique({ where: { id: matchId } });
+  if (m) return m.clubId;
+  return id;
+}
+
 export const GET = handler(async (_req, { params }) => {
   const user = await requireUser(await currentUser());
-  const { id, matchId } = await params as { id: string; matchId: string };
+  const { id: rawId, matchId } = (await params) as { id: string; matchId: string };
+  const id = await resolveClubId(rawId, matchId);
   await getClubContext(id, user);
   return ok(await getMatch(id, matchId));
 });
@@ -34,7 +43,8 @@ const actionSchema = z.discriminatedUnion("action", [
 
 export const POST = handler(async (req, { params }) => {
   const user = await requireUser(await currentUser());
-  const { id, matchId } = await params as { id: string; matchId: string };
+  const { id: rawId, matchId } = (await params) as { id: string; matchId: string };
+  const id = await resolveClubId(rawId, matchId);
   await requireManagerOrCoach(id, user);
   const input = await parseBody(req, actionSchema);
 

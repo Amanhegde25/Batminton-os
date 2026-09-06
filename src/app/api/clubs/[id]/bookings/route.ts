@@ -48,7 +48,13 @@ export const DELETE = handler(async (req, { params }) => {
   const user = await requireUser(await currentUser());
   const { id } = await params;
   const ctx = await getClubContext(id, user);
-  const input = await parseBody(req, cancelSchema);
+  const url = new URL(req.url);
+  const qBookingId = url.searchParams.get("bookingId");
+  let bookingId = qBookingId;
+  if (!bookingId) {
+    const input = await parseBody(req, cancelSchema);
+    bookingId = input.bookingId;
+  }
   const staff = ["OWNER", "ADMIN"].includes(ctx.membership?.role ?? "");
-  return ok(await cancelBooking(id, user, input.bookingId, staff));
+  return ok(await cancelBooking(id, user, bookingId, staff));
 });

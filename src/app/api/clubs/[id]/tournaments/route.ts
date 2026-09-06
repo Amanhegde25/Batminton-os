@@ -34,9 +34,19 @@ export const POST = handler(async (req, { params }) => {
   );
 });
 
+async function resolveClubId(id: string, tournamentId?: string): Promise<string> {
+  if (id && id !== "_" && id !== "undefined") return id;
+  if (tournamentId) {
+    const { prisma } = await import("@/server/db");
+    const t = await prisma.tournament.findUnique({ where: { id: tournamentId } });
+    if (t) return t.clubId;
+  }
+  return id;
+}
+
 export const PATCH = handler(async (req, { params }) => {
   const user = await requireUser(await currentUser());
-  const { id } = await params;
+  const { id: rawId } = await params;
   const body = await parseBody(
     req,
     z.discriminatedUnion("action", [
@@ -45,6 +55,7 @@ export const PATCH = handler(async (req, { params }) => {
       z.object({ action: z.literal("score"), tournamentId: z.string(), matchId: z.string(), setsText: z.string() })
     ])
   );
+  const id = await resolveClubId(rawId, body.tournamentId);
   switch (body.action) {
     case "register": {
       await getClubContext(id, user);

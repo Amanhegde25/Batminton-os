@@ -5,13 +5,14 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { api } from "@/lib/client";
 import { Button, Field, Input } from "@/components/ui";
+import { ShuttlecockIcon } from "@/components/icons";
 
 function AuthShell({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) {
   return (
     <main className="flex min-h-screen items-center justify-center px-4 py-10">
       <div className="w-full max-w-md">
         <Link href="/" className="mb-8 flex items-center justify-center gap-2 text-lg font-bold">
-          <span className="text-xl">🏸</span> Badminton Club OS
+          <ShuttlecockIcon className="h-6 w-6 text-primary" /> Badminton Club OS
         </Link>
         <div className="rounded-2xl border bg-card p-6 shadow-sm sm:p-8">
           <h1 className="text-xl font-semibold">{title}</h1>
@@ -55,6 +56,10 @@ export function LoginForm() {
 
   async function requestOtp(e: React.FormEvent) {
     e.preventDefault();
+    if (!mobile.trim()) {
+      setError("Please enter your mobile number");
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -63,6 +68,7 @@ export function LoginForm() {
         json: { mobile }
       });
       setDevCode(res.devCode ?? null);
+      if (res.devCode) setCode(res.devCode);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not send OTP");
     } finally {
@@ -85,10 +91,20 @@ export function LoginForm() {
         ) : (
           <>
             <Field label="Mobile number">
-              <Input value={mobile} onChange={(e) => setMobile(e.target.value)} placeholder="+919876543210" />
+              <div className="flex gap-2">
+                <Input value={mobile} onChange={(e) => setMobile(e.target.value)} placeholder="+919876543210" />
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={busy || !mobile.trim()}
+                  onClick={(e) => void requestOtp(e)}
+                >
+                  {devCode ? "Resend" : "Send OTP"}
+                </Button>
+              </div>
             </Field>
             {devCode && (
-              <p className="rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground">
+              <p className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-700 dark:text-emerald-300">
                 Dev mode code: <b>{devCode}</b>
               </p>
             )}

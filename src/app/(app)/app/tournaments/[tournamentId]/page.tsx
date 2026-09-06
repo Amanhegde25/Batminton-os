@@ -33,10 +33,10 @@ interface TournamentDetail {
 }
 
 function BracketInner() {
-  const params = useParams<{ id: string; tournamentId: string }>();
-  const clubId = params.id;
+  const params = useParams<{ id?: string; tournamentId: string }>();
+  const { me, activeClubId, activeMembership } = useSession();
   const tid = params.tournamentId;
-  const { me, activeMembership } = useSession();
+  const clubId = params.id || activeClubId || "_";
   const [t, setT] = useState<TournamentDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -47,6 +47,7 @@ function BracketInner() {
   const isStaff = ["OWNER", "ADMIN"].includes(activeMembership?.role ?? "");
 
   const load = useCallback(async () => {
+    if (!tid) return;
     try {
       setT(await api<TournamentDetail>(`/clubs/${clubId}/tournaments/${tid}`));
     } catch (err) {
