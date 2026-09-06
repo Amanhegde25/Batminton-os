@@ -1,8 +1,4 @@
 import { prisma } from "@/server/db";
-import { ApiError } from "@/lib/api";
-import { PLANS } from "@/lib/constants";
-import { audit } from "./audit";
-import { notify } from "./notifications";
 
 export async function platformOverview() {
   const [clubs, users, matches, attendanceToday] = await Promise.all([
@@ -38,28 +34,4 @@ export async function platformOverview() {
       createdAt: c.createdAt
     }))
   };
-}
-
-export async function changePlan(clubId: string, plan: string, actorId: string) {
-  if (!PLANS.includes(plan as any)) throw ApiError.badRequest(`Plan must be one of ${PLANS.join(", ")}`);
-  const club = await prisma.club.findFirst({ where: { id: clubId, deletedAt: null } });
-  if (!club) throw ApiError.notFound("Club not found");
-  const updated = await prisma.club.update({ where: { id: clubId }, data: { subscriptionPlan: plan } });
-  await audit({
-    clubId,
-    actorUserId: actorId,
-    action: "platform.plan_changed",
-    entityType: "Club",
-    entityId: clubId,
-    previousValue: { plan: club.subscriptionPlan },
-    newValue: { plan }
-  });
-  await notify({
-    userId: club.ownerId,
-    clubId,
-    type: "PLAN_CHANGED",
-    title: `Subscription changed to ${plan}`,
-    body: `${club.name} is now on the ${plan} plan.`
-  });
-  return updated;
 }

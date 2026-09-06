@@ -72,6 +72,7 @@ const NAV = [
   { href: "/app/tournaments", label: "Tournaments", icon: Trophy, everyone: true },
   { href: "/app/coaching", label: "AI Coaching", icon: Brain, everyone: true },
   { href: "/app/videos", label: "Video Analysis", icon: Video, everyone: true },
+  { href: "/app/notifications", label: "Notifications", icon: BellIcon, everyone: true },
   { href: "/app/settings", label: "Settings", icon: Settings, everyone: true }
 ];
 
@@ -110,22 +111,38 @@ function Bell() {
         )}
       </Button>
       <Dialog open={open} onClose={() => setOpen(false)} title="Notifications">
-        <div className="mb-3 flex justify-end">
-          <Button variant="outline" size="sm" onClick={markAll}>
-            Mark all read
-          </Button>
+        <div className="mb-3 flex items-center justify-between shrink-0">
+          <Link
+            href="/app/notifications"
+            onClick={() => setOpen(false)}
+            className="text-xs font-medium text-primary hover:underline"
+          >
+            Open notifications page →
+          </Link>
+          {unread > 0 && (
+            <Button variant="outline" size="sm" onClick={markAll}>
+              Mark all read
+            </Button>
+          )}
         </div>
-        <div className="space-y-2">
-          {items.length === 0 && <p className="py-6 text-center text-sm text-muted-foreground">You're all caught up.</p>}
+        <div className="space-y-2 min-w-0">
+          {items.length === 0 && <p className="py-8 text-center text-sm text-muted-foreground">You're all caught up.</p>}
           {items.map((n) => (
             <div
               key={n.id}
-              className={`rounded-lg border p-3 ${n.readAt ? "" : "border-primary/30 bg-primary/5"}`}
+              className={`rounded-xl border p-3 transition-colors cursor-pointer min-w-0 ${
+                n.readAt ? "hover:bg-muted/50 opacity-75" : "border-primary/40 bg-primary/5 hover:bg-primary/10"
+              }`}
               onClick={() => !n.readAt && api("/notifications", { method: "POST", json: { ids: [n.id] } }).then(load)}
             >
-              <p className="text-sm font-medium">{n.title}</p>
-              {n.body && <p className="text-xs text-muted-foreground">{n.body}</p>}
-              <p className="mt-1 text-[10px] text-muted-foreground">{new Date(n.createdAt).toLocaleString()}</p>
+              <div className="flex items-start justify-between gap-2 min-w-0">
+                <p className="text-sm font-semibold break-words min-w-0 flex-1">{n.title}</p>
+                {!n.readAt && (
+                  <span className="h-2 w-2 shrink-0 rounded-full bg-primary mt-1" />
+                )}
+              </div>
+              {n.body && <p className="mt-1 text-xs text-muted-foreground break-words min-w-0">{n.body}</p>}
+              <p className="mt-1.5 text-[10px] text-muted-foreground">{new Date(n.createdAt).toLocaleString()}</p>
             </div>
           ))}
         </div>
