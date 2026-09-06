@@ -81,9 +81,12 @@ export async function uploadVideo(
 
 async function processAnalysis(id: string): Promise<void> {
   try {
+    const video = await prisma.videoAnalysis.findUnique({ where: { id } });
     await prisma.videoAnalysis.update({ where: { id }, data: { status: "PROCESSING" } });
     await sleep(2500);
-    const result = mockCvResult(id);
+    // Seed using file fingerprint (filename + size) so identical videos yield identical, deterministic results
+    const seedKey = video ? `${video.originalName}:${video.sizeBytes ?? 0}` : id;
+    const result = mockCvResult(seedKey);
     await prisma.videoAnalysis.update({
       where: { id },
       data: { status: "COMPLETED", result: JSON.stringify(result), completedAt: new Date() }

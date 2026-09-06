@@ -1,12 +1,10 @@
 export const APP_NAME = "Badminton Club OS";
 
-export type Plan = "FREE" | "PRO" | "PREMIUM";
-export const PLANS: Plan[] = ["FREE", "PRO", "PREMIUM"];
-export const PLAN_RANK: Record<Plan, number> = { FREE: 0, PRO: 1, PREMIUM: 2 };
+export type Plan = "FREE";
+export const PLANS: Plan[] = ["FREE"];
+export const PLAN_RANK: Record<Plan, number> = { FREE: 0 };
 export const PLAN_META: Record<Plan, { label: string; priceINR: string; blurb: string }> = {
-  FREE: { label: "Free", priceINR: "₹0", blurb: "Members, attendance, matches and a basic leaderboard." },
-  PRO: { label: "Pro", priceINR: "₹1,999/mo", blurb: "AI matchmaking, wallets & penalties, courts, bookings, analytics." },
-  PREMIUM: { label: "Premium", priceINR: "₹4,499/mo", blurb: "Everything in Pro plus AI coaching, video analysis and tournaments." }
+  FREE: { label: "Free", priceINR: "₹0", blurb: "All features included — completely free." }
 };
 
 export const FEATURES = {
@@ -34,20 +32,18 @@ export const FEATURE_MIN_PLAN: Record<string, Plan> = {
   LEADERBOARD: "FREE",
   WALLET: "FREE",
   NOTIFICATIONS: "FREE",
-  PENALTIES: "PRO",
-  COURTS: "PRO",
-  BOOKINGS: "PRO",
-  MATCHMAKING: "PRO",
-  ANALYTICS_ADVANCED: "PRO",
-  TOURNAMENTS: "PRO",
-  AI_COACHING: "PREMIUM",
-  VIDEO_ANALYSIS: "PREMIUM"
+  PENALTIES: "FREE",
+  COURTS: "FREE",
+  BOOKINGS: "FREE",
+  MATCHMAKING: "FREE",
+  ANALYTICS_ADVANCED: "FREE",
+  TOURNAMENTS: "FREE",
+  AI_COACHING: "FREE",
+  VIDEO_ANALYSIS: "FREE"
 };
 
 export const PLAN_LIMITS: Record<Plan, { maxMembers: number; maxCourts: number }> = {
-  FREE: { maxMembers: 30, maxCourts: 2 },
-  PRO: { maxMembers: 300, maxCourts: 12 },
-  PREMIUM: { maxMembers: 5000, maxCourts: 64 }
+  FREE: { maxMembers: 5000, maxCourts: 64 }
 };
 
 export function planAllows(plan: string, feature: Feature): boolean {

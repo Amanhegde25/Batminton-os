@@ -4,7 +4,7 @@ import { currentUser } from "@/server/auth/session";
 import { requireSuperAdmin } from "@/server/rbac";
 import { changePlan } from "@/server/services/platform";
 
-const schema = z.object({ plan: z.enum(["FREE", "PRO", "PREMIUM"]) });
+const schema = z.object({ plan: z.enum(["FREE"]) });
 
 export const PATCH = handler(async (req, { params }) => {
   const admin = await requireSuperAdmin(await currentUser());

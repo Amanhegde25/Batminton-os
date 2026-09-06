@@ -106,8 +106,8 @@ function VideosInner() {
     return (
       <EmptyState
         icon={<Lock className="h-8 w-8 text-muted-foreground/80" />}
-        title="Video analysis requires PREMIUM"
-        body="Upgrade the club plan (or ask a platform admin) to unlock AI-powered rally analysis."
+        title="Video analysis is currently unavailable"
+        body="This feature is not accessible right now. Please try again later."
       />
     );
   }

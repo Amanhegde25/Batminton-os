@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { SessionProvider } from "@/components/session";
 import { api } from "@/lib/client";
-import { Badge, Button, Card, Select, Spinner, StatCard } from "@/components/ui";
+import { Badge, Button, Card, Spinner, StatCard } from "@/components/ui";
 import { Table, Td, useToast } from "@/components/ui";
 import { Shield, ArrowLeft } from "@/components/icons";
 
@@ -45,15 +45,7 @@ function AdminInner() {
     void load();
   }, []);
 
-  async function changePlan(clubId: string, plan: string) {
-    try {
-      await api(`/platform/clubs/${clubId}/plan`, { method: "PATCH", json: { plan } });
-      toast(`Plan changed to ${plan}`);
-      void load();
-    } catch (err) {
-      toast(err instanceof Error ? err.message : "Change failed", "error");
-    }
-  }
+
 
   if (loading) {
     return (
@@ -110,17 +102,7 @@ function AdminInner() {
                 <Td className="tabular-nums">{c.memberCount}</Td>
                 <Td className="tabular-nums">{c.matchCount}</Td>
                 <Td>
-                  <Select
-                    value={c.subscriptionPlan}
-                    onChange={(e) => changePlan(c.id, e.target.value)}
-                    className="h-8 w-32 text-xs"
-                  >
-                    {["FREE", "PRO", "PREMIUM"].map((p) => (
-                      <option key={p} value={p}>
-                        {p}
-                      </option>
-                    ))}
-                  </Select>
+                  <Badge tone="primary">FREE</Badge>
                 </Td>
               </tr>
             ))}

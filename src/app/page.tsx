@@ -86,25 +86,12 @@ export default function LandingPage() {
       </section>
 
       <section className="border-t bg-card/50">
-        <div className="container-page grid gap-8 py-16 sm:grid-cols-3">
-          <div>
-            <p className="text-3xl font-bold text-primary">FREE</p>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Members, attendance, matches, leaderboard and wallets — forever free for small clubs.
-            </p>
-          </div>
-          <div>
-            <p className="text-3xl font-bold text-secondary">PRO</p>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Adds penalties, courts & bookings, matchmaking, advanced analytics and tournaments.
-            </p>
-          </div>
-          <div>
-            <p className="text-3xl font-bold text-accent">PREMIUM</p>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Everything plus AI coaching insights and video analysis for serious academies.
-            </p>
-          </div>
+        <div className="container-page flex flex-col items-center gap-2 py-16 text-center">
+          <p className="text-3xl font-bold text-primary">100% FREE</p>
+          <p className="mt-2 max-w-lg text-sm text-muted-foreground">
+            Every feature — members, attendance, matches, wallets, penalties, courts, bookings,
+            matchmaking, leaderboards, tournaments, AI coaching and video analysis — completely free.
+          </p>
         </div>
       </section>
 

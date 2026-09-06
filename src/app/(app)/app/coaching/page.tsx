@@ -44,7 +44,7 @@ function CoachingInner() {
         setLocked(null);
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Failed";
-        if (msg.includes("upgraded") || msg.includes("FEATURE")) setLocked("AI Coaching requires the PREMIUM plan.");
+        if (msg.includes("upgraded") || msg.includes("FEATURE")) setLocked("This feature is currently unavailable.");
         else toast(msg, "error");
       } finally {
         setLoading(false);

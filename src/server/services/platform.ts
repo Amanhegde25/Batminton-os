@@ -18,7 +18,7 @@ export async function platformOverview() {
     prisma.match.count(),
     prisma.attendanceRecord.count({ where: { day: new Date().toISOString().slice(0, 10) } })
   ]);
-  const planCounts = { FREE: 0, PRO: 0, PREMIUM: 0 };
+  const planCounts = { FREE: 0 };
   for (const c of clubs) {
     if (c.subscriptionPlan in planCounts) planCounts[c.subscriptionPlan as keyof typeof planCounts]++;
   }
