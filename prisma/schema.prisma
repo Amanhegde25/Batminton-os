@@ -1,0 +1,511 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  mobile        String?   @unique
+  passwordHash  String?
+  name          String
+  photoUrl      String?
+  dob           String?
+  gender        String?
+  role          String    @default("PLAYER")
+  skillLevel    String?
+  playingStyle  String?
+  dominantHand  String?
+  preferredTime String?
+  googleId      String?   @unique
+  tokenVersion  Int       @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
+
+  ownedClubs       Club[]
+  memberships      ClubMember[]
+  attendance       AttendanceRecord[]
+  wallets          Wallet[]
+  transactions     WalletTransaction[] @relation("UserTransactions")
+  createdTxns      WalletTransaction[] @relation("CreatedTransactions")
+  matchPlayers     MatchPlayer[]
+  ratings          PlayerRating[]
+  ratingHistory    RatingHistory[]
+  penalties        Penalty[]
+  notifications    Notification[]
+  auditLogs        AuditLog[]
+  aiInsights       AIInsight[]
+  videoAnalyses    VideoAnalysis[]
+  bookings         CourtBooking[]
+  tournamentsWon   Tournament[]           @relation("WinnerTournaments")
+  runnerUpOf       Tournament[]           @relation("RunnerUpTournaments")
+  thirdPlaceOf     Tournament[]           @relation("ThirdPlaceTournaments")
+  tParticipations  TournamentParticipant[]
+  resetTokens      PasswordResetToken[]
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model OtpCode {
+  id         String    @id @default(cuid())
+  mobile     String
+  codeHash   String
+  attempts   Int       @default(0)
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([mobile, createdAt])
+}
+
+model Club {
+  id               String    @id @default(cuid())
+  name             String
+  slug             String    @unique
+  description      String?
+  logoUrl          String?
+  city             String?
+  address          String?
+  lat              Float?
+  lng              Float?
+  ownerId          String
+  subscriptionPlan String    @default("FREE")
+  settings         String    @default("{}")
+  sport            String    @default("BADMINTON")
+  isPublic         Boolean   @default(true)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  deletedAt        DateTime?
+
+  owner            User                     @relation(fields: [ownerId], references: [id])
+  members          ClubMember[]
+  courts           Court[]
+  bookings         CourtBooking[]
+  attendance       AttendanceRecord[]
+  matches          Match[]
+  ratings          PlayerRating[]
+  wallets          Wallet[]
+  transactions     WalletTransaction[]
+  penaltyRules     PenaltyRule[]
+  penalties        Penalty[]
+  tournaments      Tournament[]
+  auditLogs        AuditLog[]
+  videoAnalyses    VideoAnalysis[]
+}
+
+model ClubMember {
+  id        String    @id @default(cuid())
+  clubId    String
+  userId    String
+  role      String    @default("PLAYER")
+  status    String    @default("ACTIVE")
+  joinedAt  DateTime  @default(now())
+  removedAt DateTime?
+
+  club Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([clubId, userId])
+  @@index([userId])
+}
+
+model Court {
+  id         String    @id @default(cuid())
+  clubId     String
+  name       String
+  number     Int
+  type       String    @default("SYNTHETIC")
+  status     String    @default("AVAILABLE")
+  openHour   Int       @default(6)
+  closeHour  Int       @default(22)
+  hourlyFee  Int       @default(0)
+  notes      String?
+  deletedAt  DateTime?
+  createdAt  DateTime  @default(now())
+
+  club     Club           @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  matches  Match[]
+  bookings CourtBooking[]
+
+  @@unique([clubId, number])
+  @@index([clubId, status])
+}
+
+model CourtBooking {
+  id             String    @id @default(cuid())
+  clubId         String
+  courtId        String
+  userId         String
+  startTime      DateTime
+  endTime        DateTime
+  status         String    @default("CONFIRMED")
+  paymentStatus  String    @default("FREE")
+  amount         Int       @default(0)
+  notes          String?
+  createdById    String?
+  createdAt      DateTime  @default(now())
+  cancelledById  String?
+  cancelledAt    DateTime?
+
+  club  Club  @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  court Court @relation(fields: [courtId], references: [id])
+  user  User  @relation(fields: [userId], references: [id])
+
+  @@index([courtId, startTime])
+  @@index([clubId, status])
+}
+
+model AttendanceRecord {
+  id          String   @id @default(cuid())
+  clubId      String
+  userId      String
+  day         String
+  status      String
+  method      String   @default("MANUAL")
+  lat         Float?
+  lng         Float?
+  note        String?
+  markedById  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  club Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([clubId, userId, day])
+  @@index([clubId, day])
+  @@index([userId, day])
+}
+
+model Wallet {
+  id            String   @id @default(cuid())
+  clubId        String
+  userId        String
+  balance       Int      @default(0)
+  totalCredited Int      @default(0)
+  totalDebited  Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  club         Club                @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  user         User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions WalletTransaction[]
+
+  @@unique([clubId, userId])
+  @@index([userId])
+}
+
+model WalletTransaction {
+  id           String    @id @default(cuid())
+  clubId       String
+  walletId     String
+  userId       String
+  amount       Int
+  balanceAfter Int
+  type         String
+  status       String    @default("COMPLETED")
+  description  String?
+  relatedType  String?
+  relatedId    String?
+  reversesId   String?   @unique
+  reversedById String?
+  createdById  String?
+  createdAt    DateTime  @default(now())
+
+  wallet   Wallet             @relation(fields: [walletId], references: [id])
+  club     Club               @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  user     User               @relation("UserTransactions", fields: [userId], references: [id])
+  createdBy User?             @relation("CreatedTransactions", fields: [createdById], references: [id])
+  reverses WalletTransaction? @relation("Reversals", fields: [reversesId], references: [id])
+  reversedBy WalletTransaction[] @relation("Reversals")
+
+  @@index([walletId, createdAt])
+  @@index([clubId, userId, createdAt])
+  @@index([type])
+}
+
+model PenaltyRule {
+  id        String   @id @default(cuid())
+  clubId    String
+  eventType String
+  label     String
+  amount    Int
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  club      Club      @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  penalties Penalty[]
+
+  @@unique([clubId, eventType, label])
+  @@index([clubId, enabled])
+}
+
+model Penalty {
+  id          String    @id @default(cuid())
+  clubId      String
+  ruleId      String?
+  userId      String
+  eventType   String
+  amount      Int
+  reason      String?
+  transactionId String?
+  relatedType String?
+  relatedId   String?
+  status      String    @default("ACTIVE")
+  reversalTransactionId String?
+  createdById String?
+  createdAt   DateTime  @default(now())
+  reversedAt  DateTime?
+
+  club  Club         @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  rule  PenaltyRule? @relation(fields: [ruleId], references: [id])
+  user  User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([clubId, userId, createdAt])
+  @@index([clubId, eventType, createdAt])
+}
+
+model Match {
+  id              String    @id @default(cuid())
+  clubId          String
+  type            String    @default("DOUBLES")
+  format          String    @default("BEST_OF_3")
+  status          String    @default("SCHEDULED")
+  courtId         String?
+  scheduledAt     DateTime?
+  startedAt       DateTime?
+  endedAt         DateTime?
+  winnerTeamIndex Int?
+  isWalkover      Boolean   @default(false)
+  notes           String?
+  tournamentId    String?
+  roundLabel      String?
+  createdById     String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime?
+
+  club     Club          @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  court    Court?        @relation(fields: [courtId], references: [id])
+  teams    MatchTeam[]
+  players  MatchPlayer[]
+  scores   MatchScore[]
+  ratings  RatingHistory[]
+
+  @@index([clubId, status, scheduledAt])
+  @@index([tournamentId])
+}
+
+model MatchTeam {
+  id        String @id @default(cuid())
+  matchId   String
+  teamIndex Int
+  name      String?
+
+  match   Match         @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  players MatchPlayer[]
+
+  @@unique([matchId, teamIndex])
+}
+
+model MatchPlayer {
+  id       String @id @default(cuid())
+  matchId  String
+  teamId   String
+  userId   String
+
+  match Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  team  MatchTeam @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([matchId, userId])
+  @@index([userId])
+}
+
+model MatchScore {
+  id         String @id @default(cuid())
+  matchId    String
+  setNumber  Int
+  scoreA     Int
+  scoreB     Int
+
+  match Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
+
+  @@unique([matchId, setNumber])
+}
+
+model PlayerRating {
+  id            String    @id @default(cuid())
+  clubId        String
+  userId        String
+  rating        Float     @default(1000)
+  peak          Float     @default(1000)
+  wins          Int       @default(0)
+  losses        Int       @default(0)
+  walkovers     Int       @default(0)
+  matchesPlayed Int       @default(0)
+  lastPlayedAt  DateTime?
+
+  club Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([clubId, userId])
+  @@index([clubId, rating])
+}
+
+model RatingHistory {
+  id           String   @id @default(cuid())
+  clubId       String
+  userId       String
+  matchId      String
+  ratingBefore Float
+  ratingAfter  Float
+  delta        Float
+  createdAt    DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  match Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
+
+  @@index([clubId, userId, createdAt])
+  @@index([matchId])
+}
+
+model Tournament {
+  id          String    @id @default(cuid())
+  clubId      String
+  name        String
+  format      String    @default("KNOCKOUT")
+  status      String    @default("REGISTRATION")
+  size        Int
+  fee         Int       @default(0)
+  startsAt    DateTime?
+  winnerUserId String?
+  runnerUpUserId String?
+  thirdPlaceUserId String?
+  createdById String?
+  createdAt   DateTime  @default(now())
+  deletedAt   DateTime?
+
+  club         Club                    @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  winner       User?                   @relation("WinnerTournaments", fields: [winnerUserId], references: [id])
+  runnerUp     User?                   @relation("RunnerUpTournaments", fields: [runnerUpUserId], references: [id])
+  thirdPlace   User?                   @relation("ThirdPlaceTournaments", fields: [thirdPlaceUserId], references: [id])
+  participants TournamentParticipant[]
+  matches      TournamentMatch[]
+
+  @@index([clubId, status])
+}
+
+model TournamentParticipant {
+  id              String @id @default(cuid())
+  tournamentId    String
+  userId          String
+  seed            Int?
+  eliminatedRound Int?
+
+  tournament Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tournamentId, userId])
+}
+
+model TournamentMatch {
+  id           String   @id @default(cuid())
+  tournamentId String
+  round        Int
+  slot         Int
+  playerAId    String?
+  playerBId    String?
+  setsText     String?
+  winnerId     String?
+  status       String   @default("PENDING")
+  playedMatchId String?
+
+  tournament Tournament          @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+
+  @@unique([tournamentId, round, slot])
+  @@index([tournamentId, round])
+}
+
+model Notification {
+  id        String    @id @default(cuid())
+  clubId    String?
+  userId    String
+  type      String
+  title     String
+  body      String?
+  data      String?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt, createdAt])
+}
+
+model AIInsight {
+  id        String    @id @default(cuid())
+  clubId    String?
+  userId    String
+  kind      String    @default("COACHING")
+  provider  String    @default("rulebased")
+  payload   String
+  expiresAt DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, kind, createdAt])
+}
+
+model VideoAnalysis {
+  id           String    @id @default(cuid())
+  clubId       String
+  userId       String
+  storageKey   String
+  originalName String
+  mimeType     String?
+  sizeBytes    Int?
+  status       String    @default("PENDING")
+  result       String?
+  error        String?
+  createdAt    DateTime  @default(now())
+  completedAt  DateTime?
+
+  club Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+model AuditLog {
+  id            String   @id @default(cuid())
+  clubId        String?
+  actorUserId   String?
+  action        String
+  entityType    String
+  entityId      String?
+  previousValue String?
+  newValue      String?
+  createdAt     DateTime @default(now())
+
+  club Club? @relation(fields: [clubId], references: [id], onDelete: SetNull)
+  actor User? @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([clubId, createdAt])
+  @@index([action])
+}

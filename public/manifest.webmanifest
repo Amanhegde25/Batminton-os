@@ -1,0 +1,16 @@
+{
+  "name": "Badminton Club OS",
+  "short_name": "Club OS",
+  "description": "Run your badminton club: attendance, wallets, courts, matches, ratings, tournaments and AI insights.",
+  "start_url": "/app",
+  "display": "standalone",
+  "background_color": "#0b1120",
+  "theme_color": "#16a34a",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

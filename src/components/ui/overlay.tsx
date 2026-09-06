@@ -1,0 +1,110 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { Button } from "./kit";
+
+export function Tabs({
+  tabs,
+  active,
+  onChange
+}: {
+  tabs: { key: string; label: React.ReactNode }[];
+  active: string;
+  onChange: (key: string) => void;
+}) {
+  return (
+    <div className="flex gap-1 overflow-x-auto rounded-xl bg-muted p-1">
+      {tabs.map((t) => (
+        <button
+          key={t.key}
+          type="button"
+          onClick={() => onChange(t.key)}
+          className={`whitespace-nowrap rounded-lg px-3.5 py-1.5 text-sm font-medium transition-colors ${
+            active === t.key ? "bg-card shadow-sm" : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          {t.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+export function Dialog({
+  open,
+  onClose,
+  title,
+  children
+}: {
+  open: boolean;
+  onClose: () => void;
+  title: string;
+  children: React.ReactNode;
+}) {
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative z-10 max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-2xl border bg-card p-6 shadow-xl">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-lg font-semibold">{title}</h2>
+          <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close">
+            ✕
+          </Button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+export function Table({ head, children }: { head: React.ReactNode[]; children: React.ReactNode }) {
+  return (
+    <div className="overflow-x-auto rounded-xl border bg-card">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b bg-muted/50 text-left">
+            {head.map((h, i) => (
+              <th key={i} className="px-4 py-2.5 font-medium text-muted-foreground">
+                {h}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>{children}</tbody>
+      </table>
+    </div>
+  );
+}
+
+export function Td({ className = "", ...props }: React.TdHTMLAttributes<HTMLTableCellElement>) {
+  return <td className={`px-4 py-3 align-middle ${className}`} {...props} />;
+}
+
+export function useToast() {
+  const [message, setMessage] = useState<{ text: string; tone: "error" | "success" } | null>(null);
+  useEffect(() => {
+    if (!message) return;
+    const t = setTimeout(() => setMessage(null), 4000);
+    return () => clearTimeout(t);
+  }, [message]);
+  const node = message ? (
+    <div
+      className={`fixed bottom-5 left-1/2 z-[60] -translate-x-1/2 rounded-full px-4 py-2 text-sm shadow-lg ${
+        message.tone === "error" ? "bg-destructive text-destructive-foreground" : "bg-primary text-primary-foreground"
+      }`}
+    >
+      {message.text}
+    </div>
+  ) : null;
+  return {
+    toast: (text: string, tone: "error" | "success" = "success") => setMessage({ text, tone }),
+    node
+  };
+}
