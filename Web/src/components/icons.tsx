@@ -23,6 +23,7 @@ export {
   Moon,
   Bell,
   Check,
+  CheckCheck,
   Plus,
   Search,
   LogOut,
