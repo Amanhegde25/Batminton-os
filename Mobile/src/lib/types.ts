@@ -6,11 +6,35 @@ export interface SessionUser {
   photoUrl: string | null;
   role: string;
   tokenVersion: number;
+  gender?: string | null;
+  skillLevel?: string | null;
+  playingStyle?: string | null;
+  dominantHand?: string | null;
+  preferredTime?: string | null;
 }
 
 export interface AuthSession {
   user: SessionUser;
   token?: string;
+}
+
+export interface MeClub {
+  id: string;
+  name: string;
+  slug: string | null;
+  logoUrl: string | null;
+  subscriptionPlan: string;
+  city: string | null;
+}
+
+export interface MeMembership {
+  role: string;
+  joinedAt: string;
+  club: MeClub;
+}
+
+export interface Me extends SessionUser {
+  memberships: MeMembership[];
 }
 
 export interface NotificationItem {
@@ -35,4 +59,256 @@ export interface ApiEnvelope<T> {
 export interface NotificationsListResponse {
   items: NotificationItem[];
   unread: number;
+}
+
+// ----------------- Dashboard Types -----------------
+
+export interface RatingCard {
+  rating: number;
+  peak: number;
+  wins: number;
+  losses: number;
+  winRate: number;
+  monthlyDelta: number;
+  consistency: number;
+  trend: { label: string; value: number }[];
+}
+
+export interface TodayMatch {
+  id: string;
+  status: string;
+  court?: { id: string; name: string; number: number } | null;
+  scheduledAt: string;
+  teams: { teamIndex: number; players: { id?: string; name: string }[] }[];
+  scores?: { setNumber: number; a: number; b: number }[];
+}
+
+export interface AttendanceRecord {
+  day: string;
+  status: string;
+}
+
+export interface AdminStats {
+  members: { total: number; pending: number };
+  attendance: { presentToday: number };
+  matches: { live: { id: string; label: string }[]; todayCount: number };
+  courts: { total: number; available: number; maintenance: number };
+  finance: {
+    outstandingDues: number;
+    membersInDues: number;
+    revenueThisMonth: number;
+    penaltiesThisWeek: number;
+  };
+  bookingsToday: number;
+  recentActivity: { action: string; by: string; at: string; entityType: string }[];
+}
+
+// ----------------- Attendance Types -----------------
+
+export interface AttendanceRosterRow {
+  userId: string;
+  name: string;
+  photoUrl: string | null;
+  status: string | null;
+  method: string | null;
+  checkInTime: string | null;
+}
+
+// ----------------- Match Types -----------------
+
+export interface MatchRow {
+  id: string;
+  type: string;
+  status: string;
+  winnerTeamIndex: number | null;
+  scheduledAt: string;
+  court?: { id: string; name: string; number: number } | null;
+  teams: { teamIndex: number; players: { id: string; name: string }[] }[];
+  scores: { setNumber: number; a: number; b: number }[];
+}
+
+// ----------------- Court & Booking Types -----------------
+
+export interface CourtItem {
+  id: string;
+  name: string;
+  number: number;
+  type: string;
+  status: string;
+  effectiveStatus?: string;
+  occupancy?: { kind: string; label: string } | null;
+  openHour: number;
+  closeHour: number;
+  hourlyFee: number;
+}
+
+export interface CourtBooking {
+  id: string;
+  courtId: string;
+  court?: { id: string; name: string; number: number };
+  startTime: string;
+  endTime: string;
+  status: string;
+  feeAmount: number;
+  notes: string | null;
+  user?: { id: string; name: string; photoUrl: string | null };
+}
+
+// ----------------- Leaderboard Types -----------------
+
+export interface LeaderboardEntry {
+  userId: string;
+  name: string;
+  photoUrl: string | null;
+  value: number;
+  display: string;
+  meta?: string;
+}
+
+// ----------------- Wallet Types -----------------
+
+export interface WalletSummary {
+  wallet: { id: string; balance: number; totalCredited: number; totalDebited: number } | null;
+  pendingDues: number;
+  monthCredit: number;
+  monthDebit: number;
+  monthNet: number;
+}
+
+export interface WalletTxn {
+  id: string;
+  type: string;
+  amount: number;
+  balanceAfter: number;
+  description: string | null;
+  createdAt: string;
+  status: string;
+  user?: { id: string; name: string; photoUrl: string | null };
+}
+
+// ----------------- Matchmaking Types -----------------
+
+export interface SidePlayer {
+  id: string;
+  name: string;
+  rating: number;
+}
+
+export interface MatchmakingAssignment {
+  court: { id: string; name: string; number: number } | null;
+  teamA: SidePlayer[];
+  teamB: SidePlayer[];
+  explanation: {
+    balancePct: number;
+    ratingDiff: number;
+    partnerRepetition: number;
+    opponentRepetition: number;
+  };
+}
+
+export interface MatchmakingPreview {
+  assignments: MatchmakingAssignment[];
+  queue: string[];
+  summary: Record<string, unknown> & { reasonIfEmpty?: string };
+  availablePlayers: number;
+  availableCourts: number;
+}
+
+// ----------------- Tournament Types -----------------
+
+export interface TournamentItem {
+  id: string;
+  name: string;
+  size: number;
+  status: string;
+  fee: number;
+  _count?: { participants: number };
+}
+
+// ----------------- Coaching Types -----------------
+
+export interface CoachingInsight {
+  headline: string;
+  focusAreas: string[];
+  drills: string[];
+  summary: string;
+  confidence: number;
+  provider: string;
+  generatedAt: string;
+  cached: boolean;
+}
+
+// ----------------- Video Analysis Types -----------------
+
+export interface VideoItem {
+  id: string;
+  fileName: string;
+  status: string;
+  durationSeconds: number | null;
+  createdAt: string;
+  userId?: string;
+}
+
+export interface VideoAnalysisResult {
+  footworkScore: number;
+  shotAccuracy: number;
+  courtCoverage: number;
+  smashSpeedKmh: number;
+  rallyCount: number;
+  insights: string[];
+}
+
+// ----------------- Member Types -----------------
+
+export interface MemberItem {
+  id: string;
+  userId: string;
+  name: string;
+  email: string;
+  photoUrl: string | null;
+  role: string;
+  status: string;
+  rating: number;
+  balance: number;
+  attendanceRate: number;
+  joinedAt: string;
+}
+
+// ----------------- Penalty Types -----------------
+
+export interface PenaltyItem {
+  id: string;
+  userId: string;
+  eventType: string;
+  label: string | null;
+  reason: string | null;
+  amount: number;
+  status: string;
+  createdAt: string;
+  user: { id: string; name: string; photoUrl: string | null };
+}
+
+export interface PenaltyRule {
+  id: string;
+  eventType: string;
+  label: string;
+  amount: number;
+  enabled: boolean;
+}
+
+// ----------------- Club Settings Types -----------------
+
+export interface ClubSettings {
+  sport?: string;
+  attendance: {
+    startMinutes: number;
+    graceMinutes: number;
+    gpsRequired: boolean;
+    gpsRadiusMeters: number;
+    selfCheckIn: boolean;
+    autoAbsentPenalty: boolean;
+    minAttendancePct: number;
+  };
+  booking: { cancellationWindowMinutes: number };
+  membership: { monthlyFee: number; autoApprove: boolean };
 }

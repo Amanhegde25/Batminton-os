@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ActivityIndicator, View, StyleSheet } from "react-native";
 import { AuthProvider, useAuth } from "../src/context/auth";
+import { ClubProvider } from "../src/context/club";
 import { colors } from "../src/theme/colors";
 
 const queryClient = new QueryClient({
@@ -27,10 +28,8 @@ function RootNavigator() {
     const inAuthGroup = segments[0] === "(auth)";
 
     if (!user && !inAuthGroup) {
-      // User is not logged in and not in the auth flow -> redirect to login
       router.replace("/(auth)/login");
     } else if (user && inAuthGroup) {
-      // User is logged in and still in the auth flow -> redirect to dashboard
       router.replace("/(tabs)");
     }
   }, [user, isLoading, segments, router]);
@@ -47,11 +46,21 @@ function RootNavigator() {
     <Stack
       screenOptions={{
         headerShown: false,
-        contentStyle: { backgroundColor: colors.background }
+        contentStyle: { backgroundColor: colors.background },
+        animation: "slide_from_right"
       }}
     >
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+      <Stack.Screen name="attendance" options={{ headerShown: false }} />
+      <Stack.Screen name="wallet" options={{ headerShown: false }} />
+      <Stack.Screen name="matchmaking" options={{ headerShown: false }} />
+      <Stack.Screen name="tournaments" options={{ headerShown: false }} />
+      <Stack.Screen name="coaching" options={{ headerShown: false }} />
+      <Stack.Screen name="videos" options={{ headerShown: false }} />
+      <Stack.Screen name="members" options={{ headerShown: false }} />
+      <Stack.Screen name="penalties" options={{ headerShown: false }} />
+      <Stack.Screen name="settings" options={{ headerShown: false }} />
     </Stack>
   );
 }
@@ -61,8 +70,10 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
-          <StatusBar style="light" />
-          <RootNavigator />
+          <ClubProvider>
+            <StatusBar style="light" />
+            <RootNavigator />
+          </ClubProvider>
         </AuthProvider>
       </QueryClientProvider>
     </SafeAreaProvider>

@@ -1,8 +1,8 @@
 @echo off
 setlocal
 
-if "%~1"=="" (set PORT=8081) else (set PORT=%~1)
-if "%~2"=="" (set FOLDER=%~dp0mobile) else (set FOLDER=%~2)
+if "%~1"=="" (set PORT=3000) else (set PORT=%~1)
+if "%~2"=="" (set FOLDER=%~dp0web) else (set FOLDER=%~2)
 
 cd /d "%FOLDER%"
 
@@ -23,6 +23,6 @@ if not exist "node_modules" (
 )
 
 echo.
-@REM echo Starting Client-Mobile at http://localhost:%PORT%
-@REM start "" http://localhost:%PORT%
-call npx expo start --offline --clear
+echo Starting Client-Web at http://localhost:%PORT%
+start "" http://localhost:%PORT%
+call npm run dev

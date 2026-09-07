@@ -1,9 +1,12 @@
 import React from "react";
 import { Tabs } from "expo-router";
-import { Home, Bell, User } from "lucide-react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Home, Calendar, Trophy, Grid, Menu, Bell, User } from "lucide-react-native";
 import { colors } from "../../src/theme/colors";
 
 export default function TabsLayout() {
+  const insets = useSafeAreaInsets();
+
   return (
     <Tabs
       screenOptions={{
@@ -12,9 +15,9 @@ export default function TabsLayout() {
           backgroundColor: colors.tabBar,
           borderTopColor: colors.tabBarBorder,
           borderTopWidth: 1,
-          height: 60,
-          paddingBottom: 8,
-          paddingTop: 6
+          height: 60 + (insets.bottom > 0 ? insets.bottom : 8),
+          paddingBottom: insets.bottom > 0 ? insets.bottom : 8,
+          paddingTop: 8
         },
         tabBarActiveTintColor: colors.tabActive,
         tabBarInactiveTintColor: colors.tabInactive,
@@ -29,26 +32,60 @@ export default function TabsLayout() {
         options={{
           title: "Home",
           tabBarIcon: ({ color, size }: { color: string; size?: number }) => (
-            <Home size={size ?? 24} color={color} />
+            <Home size={size ?? 22} color={color} />
           )
         }}
       />
       <Tabs.Screen
+        name="matches"
+        options={{
+          title: "Matches",
+          tabBarIcon: ({ color, size }: { color: string; size?: number }) => (
+            <Calendar size={size ?? 22} color={color} />
+          )
+        }}
+      />
+      <Tabs.Screen
+        name="courts"
+        options={{
+          title: "Courts",
+          tabBarIcon: ({ color, size }: { color: string; size?: number }) => (
+            <Grid size={size ?? 22} color={color} />
+          )
+        }}
+      />
+      <Tabs.Screen
+        name="leaderboards"
+        options={{
+          title: "Rankings",
+          tabBarIcon: ({ color, size }: { color: string; size?: number }) => (
+            <Trophy size={size ?? 22} color={color} />
+          )
+        }}
+      />
+      <Tabs.Screen
+        name="hub"
+        options={{
+          title: "More",
+          tabBarIcon: ({ color, size }: { color: string; size?: number }) => (
+            <Menu size={size ?? 22} color={color} />
+          )
+        }}
+      />
+
+      {/* Background Tab Screens (accessible via navigation without tab bar items) */}
+      <Tabs.Screen
         name="notifications"
         options={{
-          title: "Alerts",
-          tabBarIcon: ({ color, size }: { color: string; size?: number }) => (
-            <Bell size={size ?? 24} color={color} />
-          )
+          href: null,
+          title: "Alerts"
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
-          title: "Profile",
-          tabBarIcon: ({ color, size }: { color: string; size?: number }) => (
-            <User size={size ?? 24} color={color} />
-          )
+          href: null,
+          title: "Profile"
         }}
       />
     </Tabs>

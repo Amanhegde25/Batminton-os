@@ -12,7 +12,8 @@
       "bundleIdentifier": "com.bcos.app"
     },
     "android": {
-      "package": "com.bcos.app"
+      "package": "com.bcos.app",
+      "usesCleartextTraffic": true
     },
     "web": {
       "bundler": "metro"

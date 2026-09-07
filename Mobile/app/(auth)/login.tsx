@@ -14,6 +14,7 @@ import { useAuth } from "../../src/context/auth";
 import { colors } from "../../src/theme/colors";
 import { Button } from "../../src/components/Button";
 import { loginSchema } from "../../src/lib/schemas";
+import { getBaseApiUrl } from "../../src/lib/api";
 
 export default function LoginScreen() {
   const { signIn } = useAuth();
@@ -126,6 +127,12 @@ export default function LoginScreen() {
                 </TouchableOpacity>
               </View>
             </View>
+
+            <View style={styles.serverSection}>
+              <Text style={styles.serverText}>
+                Backend: {getBaseApiUrl()}
+              </Text>
+            </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -237,5 +244,13 @@ const styles = StyleSheet.create({
   demoBtnText: {
     fontSize: 12,
     color: colors.textMuted
+  },
+  serverSection: {
+    marginTop: 12,
+    alignItems: "center"
+  },
+  serverText: {
+    fontSize: 11,
+    color: colors.textSubtle
   }
 });
