@@ -1,0 +1,25 @@
+{
+  "expo": {
+    "name": "Badminton Club OS",
+    "slug": "badminton-club-os",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "bcos",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.bcos.app"
+    },
+    "android": {
+      "package": "com.bcos.app"
+    },
+    "web": {
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store"
+    ]
+  }
+}

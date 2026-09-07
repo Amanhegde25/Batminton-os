@@ -1,0 +1,12 @@
+{
+  "name": "badminton-club-os-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "web:dev": "npm --prefix Web run dev",
+    "web:build": "npm --prefix Web run build",
+    "mobile:start": "npm --prefix Mobile run start",
+    "mobile:android": "npm --prefix Mobile run android",
+    "mobile:ios": "npm --prefix Mobile run ios"
+  }
+}
