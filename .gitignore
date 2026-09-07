@@ -1,0 +1,54 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Production & Build outputs
+.next/
+out/
+build/
+dist/
+.expo/
+*.tsbuildinfo
+next-env.d.ts
+
+# Environment variables & secrets
+.env
+.env.local
+.env*.local
+!.env.example
+
+# Database & SQLite files
+data/
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+prisma/dev.db*
+dev.db
+dev.db-journal
+
+# Keystores & Certificates (Mobile)
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+
+# Logs
+npm-debug.*
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
+
+# Editor & OS files
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# Deployment
+.vercel
