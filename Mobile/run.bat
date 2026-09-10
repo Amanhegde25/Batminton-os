@@ -2,7 +2,7 @@
 setlocal
 
 if "%~1"=="" (set PORT=8081) else (set PORT=%~1)
-if "%~2"=="" (set FOLDER=%~dp0mobile) else (set FOLDER=%~2)
+if "%~2"=="" (set FOLDER=%~dp0) else (set FOLDER=%~2)
 
 cd /d "%FOLDER%"
 

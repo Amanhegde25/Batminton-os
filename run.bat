@@ -8,7 +8,7 @@ echo Starting Client-Web and Server
 echo ========================================
 
 echo Starting Client-Web in Windows Terminal tab...
-wt -w 0 new-tab --title "Client-Web" cmd /c "%DIR%web.bat"
+wt -w 0 new-tab --title "Client-Web" cmd /c "%DIR%web/run.bat"
 
 echo.
 echo Waiting for Client-Web on port 3000...
@@ -25,7 +25,7 @@ echo ========================================
 echo Starting Client-Web and Server
 echo ========================================
 echo Starting Server in new Windows Terminal tab...
-wt -w 0 new-tab --title "mobile" cmd /c "%DIR%mobile.bat" 
+wt -w 0 new-tab --title "mobile" cmd /c "%DIR%mobile/run.bat" 
 
 echo.
 echo ========================================

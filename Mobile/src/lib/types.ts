@@ -63,6 +63,24 @@ export interface NotificationsListResponse {
 
 // ----------------- Dashboard Types -----------------
 
+export interface NearbyClub {
+  id: string;
+  name: string;
+  slug: string;
+  city: string | null;
+  address: string | null;
+  logoUrl: string | null;
+  description: string | null;
+  subscriptionPlan: string;
+  sport: string;
+  courtCount: number;
+  memberCount: number;
+  lat: number | null;
+  lng: number | null;
+  distanceKm: number | null;
+  membership?: { id: string; status: string; role: string } | null;
+}
+
 export interface RatingCard {
   rating: number;
   peak: number;

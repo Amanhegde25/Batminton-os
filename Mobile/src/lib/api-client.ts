@@ -9,6 +9,7 @@ import type {
   TodayMatch,
   AttendanceRecord,
   AdminStats,
+  NearbyClub,
   AttendanceRosterRow,
   MatchRow,
   CourtItem,
@@ -125,7 +126,18 @@ export function createApiClient(config: ApiClientConfig) {
         request<{ id: string; name: string; settings: ClubSettings }>(`/api/clubs/${clubId}`),
       dashboard: (clubId: string) => request<AdminStats>(`/api/clubs/${clubId}/dashboard`),
       playerRating: (clubId: string, userId: string) =>
-        request<RatingCard>(`/api/clubs/${clubId}/players/${userId}/rating`)
+        request<RatingCard>(`/api/clubs/${clubId}/players/${userId}/rating`),
+      nearby: (params?: { lat?: number; lng?: number; city?: string; q?: string }) => {
+        const qs = new URLSearchParams();
+        if (params?.lat != null) qs.set("lat", String(params.lat));
+        if (params?.lng != null) qs.set("lng", String(params.lng));
+        if (params?.city) qs.set("city", params.city);
+        if (params?.q) qs.set("q", params.q);
+        const queryStr = qs.toString();
+        return request<NearbyClub[]>(`/api/clubs${queryStr ? `?${queryStr}` : ""}`);
+      },
+      join: (clubId: string) =>
+        request<{ status: string }>(`/api/clubs/${clubId}/join`, { method: "POST" })
     },
 
     // 3. Attendance

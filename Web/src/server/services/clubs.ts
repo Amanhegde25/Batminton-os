@@ -141,17 +141,53 @@ export async function getClubForUser(clubId: string) {
   return club;
 }
 
-export async function listPublicClubs(q?: string, userId?: string) {
+function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371; // km
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return Math.round(R * c * 10) / 10;
+}
+
+export interface ListClubsOptions {
+  lat?: number;
+  lng?: number;
+  city?: string;
+  excludeClubId?: string;
+}
+
+export async function listPublicClubs(q?: string, userId?: string, options?: ListClubsOptions) {
   const clubs = await prisma.club.findMany({
-    where: { deletedAt: null, isPublic: true, ...(q ? { OR: [{ name: { contains: q } }, { city: { contains: q } }] } : {}) },
+    where: {
+      deletedAt: null,
+      isPublic: true,
+      ...(options?.excludeClubId ? { id: { not: options.excludeClubId } } : {}),
+      ...(q
+        ? {
+            OR: [
+              { name: { contains: q } },
+              { city: { contains: q } },
+              { address: { contains: q } }
+            ]
+          }
+        : {})
+    },
     select: {
       id: true,
       name: true,
       slug: true,
       city: true,
+      address: true,
+      lat: true,
+      lng: true,
       logoUrl: true,
       description: true,
       subscriptionPlan: true,
+      sport: true,
       _count: { select: { members: true, courts: true } }
     },
     orderBy: { createdAt: "desc" },
@@ -168,15 +204,46 @@ export async function listPublicClubs(q?: string, userId?: string) {
     membershipMap = new Map(memberships.map((m) => [m.clubId, { id: m.id, status: m.status, role: m.role }]));
   }
 
-  return clubs.map((c) => ({
-    id: c.id,
-    name: c.name,
-    slug: c.slug,
-    city: c.city,
-    logoUrl: c.logoUrl,
-    description: c.description,
-    subscriptionPlan: c.subscriptionPlan,
-    memberCount: c._count.members,
-    membership: membershipMap.get(c.id) ?? null
-  }));
+  const results = clubs.map((c) => {
+    let distanceKm: number | null = null;
+    if (options?.lat != null && options?.lng != null && c.lat != null && c.lng != null) {
+      distanceKm = haversineKm(options.lat, options.lng, c.lat, c.lng);
+    }
+    return {
+      id: c.id,
+      name: c.name,
+      slug: c.slug,
+      city: c.city,
+      address: c.address,
+      lat: c.lat,
+      lng: c.lng,
+      logoUrl: c.logoUrl,
+      description: c.description,
+      subscriptionPlan: c.subscriptionPlan,
+      sport: c.sport,
+      courtCount: c._count.courts,
+      memberCount: c._count.members,
+      distanceKm,
+      membership: membershipMap.get(c.id) ?? null
+    };
+  });
+
+  // If user provided coordinates, sort primarily by distance
+  if (options?.lat != null && options?.lng != null) {
+    results.sort((a, b) => {
+      if (a.distanceKm != null && b.distanceKm != null) return a.distanceKm - b.distanceKm;
+      if (a.distanceKm != null) return -1;
+      if (b.distanceKm != null) return 1;
+      return 0;
+    });
+  } else if (options?.city) {
+    const targetCity = options.city.toLowerCase().trim();
+    results.sort((a, b) => {
+      const aMatch = a.city?.toLowerCase().trim() === targetCity ? 1 : 0;
+      const bMatch = b.city?.toLowerCase().trim() === targetCity ? 1 : 0;
+      return bMatch - aMatch;
+    });
+  }
+
+  return results;
 }

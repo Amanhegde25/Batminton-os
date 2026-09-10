@@ -6,6 +6,7 @@ import { useSession } from "@/components/session";
 import { api } from "@/lib/client";
 import { Badge, Button, Card, Spinner, StatCard } from "@/components/ui";
 import { EmptyState, Sparkline } from "@/components/ui";
+import { NearbyClubsBar } from "@/components/nearby-clubs-bar";
 
 function money(n: number) {
   return `₹${(n / 100).toLocaleString("en-IN")}`;
@@ -218,6 +219,8 @@ export default function DashboardPage() {
           />
         </div>
       </section>
+
+      <NearbyClubsBar />
 
       <section className="grid gap-4 lg:grid-cols-2">
         <Card className="p-5">

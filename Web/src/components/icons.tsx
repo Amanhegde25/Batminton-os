@@ -48,6 +48,8 @@ export {
   RefreshCw,
   Clock,
   MapPin,
+  Compass,
+  Building2,
   QrCode,
   Sliders,
   DollarSign,

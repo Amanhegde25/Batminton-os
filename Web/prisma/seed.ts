@@ -90,9 +90,27 @@ async function main() {
     lat: 18.5204,
     lng: 73.8567
   });
+  const clubC = await createClub(ownerA, {
+    name: "Indiranagar Badminton Hub",
+    city: "Bengaluru",
+    address: "100ft Road, Indiranagar",
+    description: "Premier air-conditioned wooden courts with pro coaching and weekly socials.",
+    lat: 12.9784,
+    lng: 77.6408
+  });
+  const clubD = await createClub(ownerB, {
+    name: "Koramangala Smash Zone",
+    city: "Bengaluru",
+    address: "5th Block, Koramangala",
+    description: "Spacious 6-court facility with synthetic BWF-standard flooring and evening ladders.",
+    lat: 12.9352,
+    lng: 77.6245
+  });
 
   await prisma.club.update({ where: { id: clubA.id }, data: { subscriptionPlan: "PREMIUM" } });
   await prisma.club.update({ where: { id: clubB.id }, data: { subscriptionPlan: "PRO" } });
+  await prisma.club.update({ where: { id: clubC.id }, data: { subscriptionPlan: "PREMIUM" } });
+  await prisma.club.update({ where: { id: clubD.id }, data: { subscriptionPlan: "PRO" } });
 
   console.log("👥 Creating members…");
   const playersA: Awaited<ReturnType<typeof registerUser>>[] = [ownerA];

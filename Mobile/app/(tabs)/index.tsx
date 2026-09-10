@@ -28,7 +28,8 @@ import {
   TrendingUp,
   Clock,
   ShieldCheck,
-  CheckCircle2
+  CheckCircle2,
+  MapPin
 } from "lucide-react-native";
 import { useAuth } from "../../src/context/auth";
 import { useClub } from "../../src/context/club";
@@ -36,7 +37,7 @@ import { api } from "../../src/lib/api";
 import { colors } from "../../src/theme/colors";
 import { Card } from "../../src/components/Card";
 import { Badge } from "../../src/components/Badge";
-import type { AdminStats, RatingCard, TodayMatch, WalletSummary } from "../../src/lib/types";
+import type { AdminStats, NearbyClub, RatingCard, TodayMatch, WalletSummary } from "../../src/lib/types";
 
 function money(n: number): string {
   return `₹${(Math.abs(n) / 100).toLocaleString("en-IN")}`;
@@ -44,7 +45,7 @@ function money(n: number): string {
 
 export default function HomeScreen() {
   const { user } = useAuth();
-  const { activeClubId, activeClub, activeMembership, isStaff, openClubSwitcher } = useClub();
+  const { activeClubId, activeClub, activeMembership, isStaff, openClubSwitcher, switchClub } = useClub();
   const router = useRouter();
   const queryClient = useQueryClient();
 
@@ -84,6 +85,25 @@ export default function HomeScreen() {
     queryFn: () => api.notifications.list(1)
   });
 
+  const { data: nearbyClubs = [], refetch: refetchNearby } = useQuery<NearbyClub[]>({
+    queryKey: ["nearbyClubs", activeClub?.city],
+    queryFn: () => api.clubs.nearby({ city: activeClub?.city || undefined }),
+    enabled: !!user
+  });
+
+  const [joiningClubId, setJoiningClubId] = useState<string | null>(null);
+  const handleJoinClub = async (clubId: string) => {
+    setJoiningClubId(clubId);
+    try {
+      await api.clubs.join(clubId);
+      void queryClient.invalidateQueries({ queryKey: ["nearbyClubs"] });
+    } catch (e) {
+      console.warn("Failed to join club", e);
+    } finally {
+      setJoiningClubId(null);
+    }
+  };
+
   // Check-in Mutation
   const checkInMutation = useMutation({
     mutationFn: () =>
@@ -111,6 +131,7 @@ export default function HomeScreen() {
       refetchWallet(),
       refetchMatches(),
       refetchAttendance(),
+      refetchNearby(),
       isStaff ? refetchAdmin() : Promise.resolve()
     ]);
     setRefreshing(false);
@@ -262,6 +283,97 @@ export default function HomeScreen() {
             </Text>
           </TouchableOpacity>
         </View>
+
+        {/* Nearby Clubs Bar */}
+        {nearbyClubs.length > 0 && (
+          <View style={styles.nearbySection}>
+            <View style={styles.sectionHeader}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <MapPin size={18} color={colors.primary} />
+                <Text style={styles.sectionTitle}>Nearby Clubs</Text>
+              </View>
+              <TouchableOpacity onPress={openClubSwitcher}>
+                <Text style={styles.seeAllText}>All Clubs</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.nearbyScrollContent}
+            >
+              {nearbyClubs.map((club) => {
+                const isCurrent = club.id === activeClubId;
+                const isMember = club.membership?.status === "ACTIVE";
+                const isPending = club.membership?.status === "PENDING";
+
+                return (
+                  <Card
+                    key={club.id}
+                    style={[
+                      styles.nearbyCard,
+                      isCurrent && styles.nearbyCardActive
+                    ]}
+                  >
+                    <View style={styles.nearbyHeaderRow}>
+                      <View style={styles.nearbyDistPill}>
+                        <MapPin size={10} color={colors.primary} />
+                        <Text style={styles.nearbyDistText}>
+                          {club.distanceKm !== null ? `${club.distanceKm} km` : club.city || "Nearby"}
+                        </Text>
+                      </View>
+                      <Badge label={club.subscriptionPlan} tone="primary" />
+                    </View>
+
+                    <Text style={styles.nearbyTitle} numberOfLines={1}>
+                      {club.name}
+                    </Text>
+                    <Text style={styles.nearbySub} numberOfLines={1}>
+                      {club.address || club.city || "Badminton Club"}
+                    </Text>
+
+                    <View style={styles.nearbyMetaRow}>
+                      <Text style={styles.nearbyMetaText}>🏸 {club.courtCount} Courts</Text>
+                      <Text style={styles.nearbyMetaText}>👥 {club.memberCount} Players</Text>
+                    </View>
+
+                    <View style={styles.nearbyBtnWrapper}>
+                      {isCurrent ? (
+                        <View style={styles.activePill}>
+                          <CheckCircle2 size={12} color={colors.primary} />
+                          <Text style={styles.activePillText}>Active Club</Text>
+                        </View>
+                      ) : isMember ? (
+                        <TouchableOpacity
+                          style={styles.switchBtn}
+                          onPress={() => switchClub(club.id)}
+                        >
+                          <Text style={styles.switchBtnText}>Switch</Text>
+                        </TouchableOpacity>
+                      ) : isPending ? (
+                        <View style={styles.pendingPill}>
+                          <Text style={styles.pendingPillText}>Pending</Text>
+                        </View>
+                      ) : (
+                        <TouchableOpacity
+                          style={styles.joinBtn}
+                          disabled={joiningClubId === club.id}
+                          onPress={() => handleJoinClub(club.id)}
+                        >
+                          {joiningClubId === club.id ? (
+                            <ActivityIndicator size="small" color={colors.primaryForeground} />
+                          ) : (
+                            <Text style={styles.joinBtnText}>Join Club</Text>
+                          )}
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  </Card>
+                );
+              })}
+            </ScrollView>
+          </View>
+        )}
 
         {/* Today's Schedule / Matches */}
         <View style={styles.sectionHeader}>
@@ -809,5 +921,120 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: colors.textMuted,
     marginTop: 2
+  },
+  nearbySection: {
+    gap: 12
+  },
+  nearbyScrollContent: {
+    gap: 12,
+    paddingRight: 16
+  },
+  nearbyCard: {
+    width: 240,
+    padding: 14,
+    backgroundColor: colors.card,
+    borderColor: colors.cardBorder,
+    justifyContent: "space-between"
+  },
+  nearbyCardActive: {
+    borderColor: colors.primary,
+    borderWidth: 1.5
+  },
+  nearbyHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8
+  },
+  nearbyDistPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12
+  },
+  nearbyDistText: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: colors.primary
+  },
+  nearbyTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: colors.text
+  },
+  nearbySub: {
+    fontSize: 12,
+    color: colors.textMuted,
+    marginTop: 2
+  },
+  nearbyMetaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginTop: 10
+  },
+  nearbyMetaText: {
+    fontSize: 11,
+    color: colors.textMuted
+  },
+  nearbyBtnWrapper: {
+    marginTop: 12,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255, 255, 255, 0.05)"
+  },
+  activePill: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: "rgba(16, 185, 129, 0.1)"
+  },
+  activePillText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: colors.primary
+  },
+  switchBtn: {
+    paddingVertical: 6,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.primary
+  },
+  switchBtnText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: colors.primary
+  },
+  pendingPill: {
+    paddingVertical: 6,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 8,
+    backgroundColor: "rgba(245, 158, 11, 0.15)"
+  },
+  pendingPillText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#f59e0b"
+  },
+  joinBtn: {
+    paddingVertical: 6,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 8,
+    backgroundColor: colors.primary
+  },
+  joinBtnText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: colors.primaryForeground
   }
 });

@@ -7,9 +7,24 @@ import { createClub, listPublicClubs } from "@/server/services/clubs";
 import { prisma } from "@/server/db";
 
 export const GET = handler(async (req) => {
-  const user = await requireUser(await currentUser());
-  const q = new URL(req.url).searchParams.get("q") ?? undefined;
-  return ok(await listPublicClubs(q || undefined, user.id));
+  const user = await requireUser(await currentUser(req));
+  const url = new URL(req.url);
+  const q = url.searchParams.get("q") ?? undefined;
+  const city = url.searchParams.get("city") ?? undefined;
+  const excludeClubId = url.searchParams.get("excludeClubId") ?? undefined;
+  const latParam = url.searchParams.get("lat");
+  const lngParam = url.searchParams.get("lng");
+  const lat = latParam ? parseFloat(latParam) : undefined;
+  const lng = lngParam ? parseFloat(lngParam) : undefined;
+
+  return ok(
+    await listPublicClubs(q || undefined, user.id, {
+      lat: Number.isFinite(lat) ? lat : undefined,
+      lng: Number.isFinite(lng) ? lng : undefined,
+      city,
+      excludeClubId
+    })
+  );
 });
 
 const createSchema = z.object({
