@@ -31,8 +31,8 @@ export default function TabsLayout() {
         name="index"
         options={{
           title: "Home",
-          tabBarIcon: ({ color, size }: { color: string; size?: number }) => (
-            <Home size={size ?? 22} color={color} />
+          tabBarIcon: ({ color, size }) => (
+            <Home size={size ?? 22} color={color as string} />
           )
         }}
       />
@@ -40,8 +40,8 @@ export default function TabsLayout() {
         name="matches"
         options={{
           title: "Matches",
-          tabBarIcon: ({ color, size }: { color: string; size?: number }) => (
-            <Calendar size={size ?? 22} color={color} />
+          tabBarIcon: ({ color, size }) => (
+            <Calendar size={size ?? 22} color={color as string} />
           )
         }}
       />
@@ -49,8 +49,8 @@ export default function TabsLayout() {
         name="courts"
         options={{
           title: "Courts",
-          tabBarIcon: ({ color, size }: { color: string; size?: number }) => (
-            <Grid size={size ?? 22} color={color} />
+          tabBarIcon: ({ color, size }) => (
+            <Grid size={size ?? 22} color={color as string} />
           )
         }}
       />
@@ -58,8 +58,8 @@ export default function TabsLayout() {
         name="leaderboards"
         options={{
           title: "Rankings",
-          tabBarIcon: ({ color, size }: { color: string; size?: number }) => (
-            <Trophy size={size ?? 22} color={color} />
+          tabBarIcon: ({ color, size }) => (
+            <Trophy size={size ?? 22} color={color as string} />
           )
         }}
       />
@@ -67,8 +67,8 @@ export default function TabsLayout() {
         name="hub"
         options={{
           title: "More",
-          tabBarIcon: ({ color, size }: { color: string; size?: number }) => (
-            <Menu size={size ?? 22} color={color} />
+          tabBarIcon: ({ color, size }) => (
+            <Menu size={size ?? 22} color={color as string} />
           )
         }}
       />

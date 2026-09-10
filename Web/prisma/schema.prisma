@@ -3,12 +3,12 @@ generator client {
 }
 
 datasource db {
-  provider = "mongodb"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
 model User {
-  id            String    @id @default(cuid()) @map("_id")
+  id            String    @id @default(cuid())
   email         String    @unique
   mobile        String?   @unique
   passwordHash  String?
@@ -54,7 +54,7 @@ model User {
 }
 
 model PasswordResetToken {
-  id        String    @id @default(cuid()) @map("_id")
+  id        String    @id @default(cuid())
   userId    String
   tokenHash String    @unique
   expiresAt DateTime
@@ -64,7 +64,7 @@ model PasswordResetToken {
 }
 
 model OtpCode {
-  id         String    @id @default(cuid()) @map("_id")
+  id         String    @id @default(cuid())
   mobile     String
   codeHash   String
   attempts   Int       @default(0)
@@ -76,7 +76,7 @@ model OtpCode {
 }
 
 model Club {
-  id               String    @id @default(cuid()) @map("_id")
+  id               String    @id @default(cuid())
   name             String
   slug             String    @unique
   description      String?
@@ -112,7 +112,7 @@ model Club {
 }
 
 model ClubMember {
-  id        String    @id @default(cuid()) @map("_id")
+  id        String    @id @default(cuid())
   clubId    String
   userId    String
   role      String    @default("PLAYER")
@@ -128,7 +128,7 @@ model ClubMember {
 }
 
 model Court {
-  id         String    @id @default(cuid()) @map("_id")
+  id         String    @id @default(cuid())
   clubId     String
   name       String
   number     Int
@@ -150,7 +150,7 @@ model Court {
 }
 
 model CourtBooking {
-  id             String    @id @default(cuid()) @map("_id")
+  id             String    @id @default(cuid())
   clubId         String
   courtId        String
   userId         String
@@ -174,7 +174,7 @@ model CourtBooking {
 }
 
 model AttendanceRecord {
-  id          String   @id @default(cuid()) @map("_id")
+  id          String   @id @default(cuid())
   clubId      String
   userId      String
   day         String
@@ -196,7 +196,7 @@ model AttendanceRecord {
 }
 
 model Wallet {
-  id            String   @id @default(cuid()) @map("_id")
+  id            String   @id @default(cuid())
   clubId        String
   userId        String
   balance       Int      @default(0)
@@ -214,7 +214,7 @@ model Wallet {
 }
 
 model WalletTransaction {
-  id           String    @id @default(cuid()) @map("_id")
+  id           String    @id @default(cuid())
   clubId       String
   walletId     String
   userId       String
@@ -234,7 +234,7 @@ model WalletTransaction {
   club     Club               @relation(fields: [clubId], references: [id], onDelete: Cascade)
   user     User               @relation("UserTransactions", fields: [userId], references: [id])
   createdBy User?             @relation("CreatedTransactions", fields: [createdById], references: [id])
-  reverses WalletTransaction? @relation("Reversals", fields: [reversesId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  reverses WalletTransaction? @relation("Reversals", fields: [reversesId], references: [id])
   reversedBy WalletTransaction[] @relation("Reversals")
 
   @@index([walletId, createdAt])
@@ -243,7 +243,7 @@ model WalletTransaction {
 }
 
 model PenaltyRule {
-  id        String   @id @default(cuid()) @map("_id")
+  id        String   @id @default(cuid())
   clubId    String
   eventType String
   label     String
@@ -260,7 +260,7 @@ model PenaltyRule {
 }
 
 model Penalty {
-  id          String    @id @default(cuid()) @map("_id")
+  id          String    @id @default(cuid())
   clubId      String
   ruleId      String?
   userId      String
@@ -285,7 +285,7 @@ model Penalty {
 }
 
 model Match {
-  id              String    @id @default(cuid()) @map("_id")
+  id              String    @id @default(cuid())
   clubId          String
   type            String    @default("DOUBLES")
   format          String    @default("BEST_OF_3")
@@ -316,7 +316,7 @@ model Match {
 }
 
 model MatchTeam {
-  id        String @id @default(cuid()) @map("_id")
+  id        String @id @default(cuid())
   matchId   String
   teamIndex Int
   name      String?
@@ -328,7 +328,7 @@ model MatchTeam {
 }
 
 model MatchPlayer {
-  id       String @id @default(cuid()) @map("_id")
+  id       String @id @default(cuid())
   matchId  String
   teamId   String
   userId   String
@@ -342,7 +342,7 @@ model MatchPlayer {
 }
 
 model MatchScore {
-  id         String @id @default(cuid()) @map("_id")
+  id         String @id @default(cuid())
   matchId    String
   setNumber  Int
   scoreA     Int
@@ -354,7 +354,7 @@ model MatchScore {
 }
 
 model PlayerRating {
-  id            String    @id @default(cuid()) @map("_id")
+  id            String    @id @default(cuid())
   clubId        String
   userId        String
   rating        Float     @default(1000)
@@ -373,7 +373,7 @@ model PlayerRating {
 }
 
 model RatingHistory {
-  id           String   @id @default(cuid()) @map("_id")
+  id           String   @id @default(cuid())
   clubId       String
   userId       String
   matchId      String
@@ -390,7 +390,7 @@ model RatingHistory {
 }
 
 model Tournament {
-  id          String    @id @default(cuid()) @map("_id")
+  id          String    @id @default(cuid())
   clubId      String
   name        String
   format      String    @default("KNOCKOUT")
@@ -416,7 +416,7 @@ model Tournament {
 }
 
 model TournamentParticipant {
-  id              String @id @default(cuid()) @map("_id")
+  id              String @id @default(cuid())
   tournamentId    String
   userId          String
   seed            Int?
@@ -429,7 +429,7 @@ model TournamentParticipant {
 }
 
 model TournamentMatch {
-  id           String   @id @default(cuid()) @map("_id")
+  id           String   @id @default(cuid())
   tournamentId String
   round        Int
   slot         Int
@@ -447,7 +447,7 @@ model TournamentMatch {
 }
 
 model Notification {
-  id        String    @id @default(cuid()) @map("_id")
+  id        String    @id @default(cuid())
   clubId    String?
   userId    String
   type      String
@@ -463,7 +463,7 @@ model Notification {
 }
 
 model AIInsight {
-  id        String    @id @default(cuid()) @map("_id")
+  id        String    @id @default(cuid())
   clubId    String?
   userId    String
   kind      String    @default("COACHING")
@@ -478,7 +478,7 @@ model AIInsight {
 }
 
 model VideoAnalysis {
-  id           String    @id @default(cuid()) @map("_id")
+  id           String    @id @default(cuid())
   clubId       String
   userId       String
   storageKey   String
@@ -498,7 +498,7 @@ model VideoAnalysis {
 }
 
 model AuditLog {
-  id            String   @id @default(cuid()) @map("_id")
+  id            String   @id @default(cuid())
   clubId        String?
   actorUserId   String?
   action        String
@@ -518,7 +518,7 @@ model AuditLog {
 // ----------------- Play Groups Across Clubs -----------------
 
 model PlayGroup {
-  id          String    @id @default(cuid()) @map("_id")
+  id          String    @id @default(cuid())
   name        String
   slug        String    @unique
   description String?
@@ -540,7 +540,7 @@ model PlayGroup {
 }
 
 model PlayGroupMember {
-  id        String    @id @default(cuid()) @map("_id")
+  id        String    @id @default(cuid())
   groupId   String
   userId    String
   role      String    @default("MEMBER") // LEADER, MEMBER
@@ -555,7 +555,7 @@ model PlayGroupMember {
 }
 
 model PlayGroupSession {
-  id              String    @id @default(cuid()) @map("_id")
+  id              String    @id @default(cuid())
   groupId         String
   clubId          String?
   clubName        String
@@ -580,7 +580,7 @@ model PlayGroupSession {
 }
 
 model PlayGroupSessionRsvp {
-  id        String   @id @default(cuid()) @map("_id")
+  id        String   @id @default(cuid())
   sessionId String
   userId    String
   status    String   @default("YES") // YES, MAYBE, NO
@@ -595,7 +595,7 @@ model PlayGroupSessionRsvp {
 }
 
 model PlayGroupPost {
-  id        String   @id @default(cuid()) @map("_id")
+  id        String   @id @default(cuid())
   groupId   String
   userId    String
   content   String
