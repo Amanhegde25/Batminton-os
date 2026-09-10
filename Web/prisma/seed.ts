@@ -8,6 +8,7 @@ import { createMatch, completeMatch } from "../src/server/services/matches";
 import { createTournament, startTournament, submitScore } from "../src/server/services/tournaments";
 import { runDailySweep } from "../src/server/services/attendance";
 import { issueManual } from "../src/server/services/penalties";
+import { createGroup, createGroupSession, rsvpSession, joinGroup } from "../src/server/services/groups";
 import { randomValidSet, scoreToString, type SetScore } from "../src/lib/engines/scoring";
 
 const prisma = new PrismaClient();
@@ -348,6 +349,29 @@ async function main() {
       }
     ]
   });
+
+  console.log("🤝 Creating Play Groups & Cross-Club Sessions…");
+  const squad = await createGroup(ownerA.id, {
+    name: "Bangalore Smash Squad",
+    description: "Active doubles crew playing competitive evening sessions across Smash Arena and Indiranagar Badminton Hub.",
+    city: "Bengaluru",
+    skillLevel: "INTERMEDIATE",
+    isPublic: true
+  });
+  for (const p of [playersA[1], playersA[2], playersA[3]]) {
+    await joinGroup(squad.id, p.id);
+  }
+  const session1 = await createGroupSession(squad.id, ownerA.id, {
+    title: "Midweek Doubles Rumble",
+    clubId: clubA.id,
+    scheduledDate: tomorrowAt(18),
+    durationMinutes: 90,
+    maxPlayers: 4,
+    costPerPlayer: 25000,
+    notes: "Court 2 reserved. Bring Mavis 350 shuttles!"
+  });
+  await rsvpSession(session1.id, playersA[1].id, "YES");
+  await rsvpSession(session1.id, playersA[2].id, "YES");
 
   const w = await getMyWallet(clubA.id, playersA[0].id);
   console.log(`✅ Seed complete.`);

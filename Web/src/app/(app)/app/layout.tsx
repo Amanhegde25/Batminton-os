@@ -25,7 +25,8 @@ import {
   Sun,
   Moon,
   Bell as BellIcon,
-  RefreshCw
+  RefreshCw,
+  Handshake
 } from "@/components/icons";
 
 interface NotificationItem {
@@ -64,6 +65,7 @@ const NAV = [
   { href: "/app/members", label: "Members", icon: Users, staff: true },
   { href: "/app/attendance", label: "Attendance", icon: CalendarCheck, everyone: true },
   { href: "/app/matches", label: "Matches", icon: ShuttlecockIcon, everyone: true },
+  { href: "/app/groups", label: "Play Groups", icon: Handshake, everyone: true },
   { href: "/app/matchmaking", label: "Matchmaking", icon: Sparkles, everyone: true },
   { href: "/app/leaderboards", label: "Leaderboards", icon: TrendingUp, everyone: true },
   { href: "/app/courts", label: "Courts & Bookings", icon: Calendar, everyone: true },

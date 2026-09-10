@@ -63,6 +63,7 @@ export default function DashboardPage() {
   const [history, setHistory] = useState<AttendanceRecord[]>([]);
   const [adminStats, setAdminStats] = useState<AdminStats | null>(null);
   const [checkedIn, setCheckedIn] = useState<boolean | null>(null);
+  const [myGroups, setMyGroups] = useState<any[]>([]);
 
   useEffect(() => {
     if (!me || !activeClubId) return;
@@ -99,6 +100,10 @@ export default function DashboardPage() {
           setAdminStats(await api(`/clubs/${activeClubId}/dashboard`));
         } catch {}
       }
+      try {
+        const g = await api<any[]>("/groups?myOnly=true");
+        setMyGroups(Array.isArray(g) ? g : []);
+      } catch {}
     })();
   }, [me, activeClubId, activeMembership]);
 
@@ -264,6 +269,65 @@ export default function DashboardPage() {
             <p className="py-6 text-center text-sm text-muted-foreground">Play matches to build your trend line.</p>
           )}
         </Card>
+      </section>
+
+      {/* Play Groups Cross-Club Sessions Section */}
+      <section className="rounded-2xl border bg-card p-5 shadow-sm">
+        <div className="mb-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-semibold">Your Play Groups & Cross-Club Sessions</p>
+            <Badge tone="accent" className="text-[10px]">Squads</Badge>
+          </div>
+          <Link href="/app/groups" className="text-xs text-primary hover:underline">
+            View all groups →
+          </Link>
+        </div>
+
+        {myGroups.length === 0 ? (
+          <div className="flex items-center justify-between rounded-xl border border-dashed p-4 text-xs">
+            <span className="text-muted-foreground">
+              Form or join a Play Group to schedule games across different clubs with your favorite partners.
+            </span>
+            <Link href="/app/groups">
+              <Button size="sm" variant="outline" className="text-xs">
+                Explore Groups
+              </Button>
+            </Link>
+          </div>
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {myGroups.slice(0, 3).map((g) => (
+              <Link
+                key={g.id}
+                href={`/app/groups/${g.id}`}
+                className="flex flex-col justify-between rounded-xl border p-3 text-xs transition hover:border-primary/50 hover:bg-muted/30"
+              >
+                <div>
+                  <div className="flex items-center justify-between font-medium">
+                    <span className="font-semibold text-sm truncate">{g.name}</span>
+                    <Badge tone="muted" className="text-[10px]">{g.skillLevel}</Badge>
+                  </div>
+                  <p className="text-muted-foreground line-clamp-1 mt-0.5">
+                    {g.city || "Multi-club squad"} · {g.memberCount} players
+                  </p>
+                </div>
+
+                <div className="mt-3 pt-2 border-t border-border/50">
+                  {g.nextSession ? (
+                    <div className="text-[11px]">
+                      <span className="font-medium text-foreground">🏸 {g.nextSession.title}</span>
+                      <p className="text-muted-foreground mt-0.5">
+                        📍 {g.nextSession.clubName} ({g.nextSession.confirmedRsvps}/{g.nextSession.maxPlayers} spots)
+                      </p>
+                    </div>
+                  ) : (
+                    <span className="text-muted-foreground text-[11px] italic">No session scheduled</span>
+                  )}
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
       </section>
 
       {!rating && (

@@ -81,6 +81,50 @@ export interface NearbyClub {
   membership?: { id: string; status: string; role: string } | null;
 }
 
+export interface PlayGroup {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  city: string | null;
+  skillLevel: string;
+  isPublic: boolean;
+  logoUrl: string | null;
+  createdAt: string;
+  memberCount: number;
+  totalSessions: number;
+  myMembership?: { id: string; role: string; status: string } | null;
+  nextSession?: {
+    id: string;
+    title: string;
+    scheduledDate: string;
+    clubName: string;
+    maxPlayers: number;
+    confirmedRsvps: number;
+  } | null;
+}
+
+export interface PlayGroupSession {
+  id: string;
+  title: string;
+  clubId: string | null;
+  clubName: string;
+  clubAddress: string | null;
+  scheduledDate: string;
+  durationMinutes: number;
+  maxPlayers: number;
+  costPerPlayer: number | null;
+  notes: string | null;
+  status: string;
+  createdById: string;
+  rsvps: {
+    id: string;
+    userId: string;
+    status: string;
+    user: { id: string; name: string; photoUrl: string | null };
+  }[];
+}
+
 export interface RatingCard {
   rating: number;
   peak: number;

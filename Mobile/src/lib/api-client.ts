@@ -10,6 +10,8 @@ import type {
   AttendanceRecord,
   AdminStats,
   NearbyClub,
+  PlayGroup,
+  PlayGroupSession,
   AttendanceRosterRow,
   MatchRow,
   CourtItem,
@@ -271,6 +273,30 @@ export function createApiClient(config: ApiClientConfig) {
         request<{ marked: number }>("/api/notifications", {
           method: "POST",
           json: { ids }
+        })
+    },
+
+    // 15. Play Groups
+    groups: {
+      list: (params?: { myOnly?: boolean; city?: string; q?: string }) => {
+        const qs = new URLSearchParams();
+        if (params?.myOnly) qs.set("myOnly", "true");
+        if (params?.city) qs.set("city", params.city);
+        if (params?.q) qs.set("q", params.q);
+        const qStr = qs.toString();
+        return request<PlayGroup[]>(`/api/groups${qStr ? `?${qStr}` : ""}`);
+      },
+      get: (groupId: string) => request<PlayGroup & { sessions: PlayGroupSession[] }>(`/api/groups/${groupId}`),
+      create: (data: { name: string; description?: string; city?: string; skillLevel?: string; isPublic?: boolean }) =>
+        request<PlayGroup>(`/api/groups`, { method: "POST", json: data }),
+      join: (groupId: string) => request<{ id: string }>(`/api/groups/${groupId}/members`, { method: "POST" }),
+      leave: (groupId: string) => request<{ success: boolean }>(`/api/groups/${groupId}/members`, { method: "DELETE" }),
+      createSession: (groupId: string, data: any) =>
+        request<PlayGroupSession>(`/api/groups/${groupId}/sessions`, { method: "POST", json: data }),
+      rsvp: (groupId: string, sessionId: string, status: "YES" | "MAYBE" | "NO") =>
+        request<{ id: string; status: string }>(`/api/groups/${groupId}/sessions/${sessionId}/rsvp`, {
+          method: "POST",
+          json: { status }
         })
     }
   };
