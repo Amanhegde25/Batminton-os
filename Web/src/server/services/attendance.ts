@@ -10,7 +10,7 @@ import { audit } from "./audit";
 export async function checkIn(
   clubId: string,
   targetUserId: string,
-  input: { method: "MANUAL" | "QR" | "GPS"; token?: string; lat?: number; lng?: number },
+  input: { method: "MANUAL" | "QR" | "GPS" | "APP_SELF"; token?: string; lat?: number; lng?: number },
   actor: { id: string }
 ) {
   const club = await prisma.club.findFirst({ where: { id: clubId, deletedAt: null } });
@@ -37,7 +37,8 @@ export async function checkIn(
       throw ApiError.badRequest("Invalid or expired QR code");
     }
   }
-  if (input.method === "MANUAL" && targetUserId === actor.id && !settings.attendance.selfCheckIn && !isStaffActor) {
+  const isSelfCheck = input.method === "MANUAL" || input.method === "APP_SELF";
+  if (isSelfCheck && targetUserId === actor.id && !settings.attendance.selfCheckIn && !isStaffActor) {
     throw ApiError.forbidden("Self check-in is disabled. Ask an admin to mark you present.");
   }
   const day = dayKey();

@@ -102,6 +102,30 @@ export default function HubScreen() {
           </View>
         </Card>
 
+        {/* Community & Discovery */}
+        <View style={styles.section}>
+          <Text style={styles.sectionHeader}>Community & Discovery</Text>
+          <Card style={styles.menuCard}>
+            {renderHubItem({
+              title: "Find & Join Clubs",
+              subtitle: "Search verified badminton venues & join communities",
+              icon: Building,
+              iconColor: colors.primary,
+              bgColor: "rgba(16, 185, 129, 0.15)",
+              route: "/clubs"
+            })}
+            <View style={styles.menuDivider} />
+            {renderHubItem({
+              title: "Play Groups & Squads",
+              subtitle: "Cross-club player squads, session meetups & chat",
+              icon: Sparkles,
+              iconColor: "#a855f7",
+              bgColor: "rgba(168, 85, 247, 0.15)",
+              route: "/groups"
+            })}
+          </Card>
+        </View>
+
         {/* Club Operations */}
         <View style={styles.section}>
           <Text style={styles.sectionHeader}>Club Operations</Text>

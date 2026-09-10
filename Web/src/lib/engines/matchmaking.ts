@@ -4,6 +4,7 @@ export interface MMPlayer {
   rating: number;
   matchesToday: number;
   checkedInAt: number;
+  isAbsent?: boolean;
 }
 
 export interface MMAssignment {

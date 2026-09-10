@@ -11,6 +11,7 @@ interface SidePlayer {
   id: string;
   name: string;
   rating: number;
+  isAbsent?: boolean;
 }
 interface Assignment {
   court: { id: string; name: string; number: number } | null;
@@ -23,12 +24,20 @@ interface Assignment {
     opponentRepetition: number;
   };
 }
+interface QueueItem {
+  id: string;
+  name: string;
+  isAbsent?: boolean;
+}
 interface Preview {
   assignments: Assignment[];
-  queue: string[];
+  queue: (string | QueueItem)[];
   summary: Record<string, unknown> & { reasonIfEmpty?: string };
   availablePlayers: number;
   availableCourts: number;
+  allowAbsent?: boolean;
+  absentPlayers?: { id: string; name: string; rating: number }[];
+  includedAbsentCount?: number;
 }
 interface SidePlayerWithPhoto extends SidePlayer {
   photoUrl?: string | null;
@@ -39,22 +48,29 @@ function MatchmakingInner() {
   const [preview, setPreview] = useState<Preview | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [includeAbsent, setIncludeAbsent] = useState(false);
+  const [selectedAbsentIds, setSelectedAbsentIds] = useState<string[]>([]);
   const { toast, node } = useToast();
 
   const canApply = ["OWNER", "ADMIN", "COACH"].includes(activeMembership?.role ?? "");
 
-  const load = useCallback(async () => {
-    if (!activeClubId) return;
-    setLoading(true);
-    try {
-      setPreview(await api<Preview>(`/clubs/${activeClubId}/matchmaking/generate?mode=DOUBLES`));
-    } catch (err) {
-      toast(err instanceof Error ? err.message : "Matchmaking unavailable (PRO feature)", "error");
-    } finally {
-      setLoading(false);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeClubId]);
+  const load = useCallback(
+    async (incAbsent = includeAbsent, extraIds = selectedAbsentIds) => {
+      if (!activeClubId) return;
+      setLoading(true);
+      try {
+        const qs = new URLSearchParams({ mode: "DOUBLES" });
+        if (incAbsent) qs.set("includeAbsent", "true");
+        if (extraIds.length > 0) qs.set("extraPlayerIds", extraIds.join(","));
+        setPreview(await api<Preview>(`/clubs/${activeClubId}/matchmaking/generate?${qs.toString()}`));
+      } catch (err) {
+        toast(err instanceof Error ? err.message : "Matchmaking unavailable (PRO feature)", "error");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [activeClubId, includeAbsent, selectedAbsentIds, toast]
+  );
 
   useEffect(() => {
     void load();
@@ -65,7 +81,12 @@ function MatchmakingInner() {
     try {
       await api(`/clubs/${activeClubId}/matchmaking/generate`, {
         method: "POST",
-        json: { mode: "DOUBLES", apply: true }
+        json: {
+          mode: "DOUBLES",
+          apply: true,
+          includeAbsent,
+          extraPlayerIds: selectedAbsentIds.length > 0 ? selectedAbsentIds : undefined
+        }
       });
       toast("Matches scheduled! Check the Matches tab.");
       void load();
@@ -83,15 +104,24 @@ function MatchmakingInner() {
         <div>
           <h1 className="text-2xl font-bold">AI Matchmaking</h1>
           <p className="text-sm text-muted-foreground">
-            Balanced doubles for players checked in today — fair partners, close ratings.
+            Balanced doubles generated from ratings, partner fairness and fatigue.
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={() => void load()} disabled={loading} className="inline-flex items-center gap-1.5">
+          <Button
+            variant="outline"
+            onClick={() => void load()}
+            disabled={loading}
+            className="inline-flex items-center gap-1.5"
+          >
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /> Regenerate
           </Button>
           {canApply && (
-            <Button onClick={apply} disabled={busy || !preview?.assignments.length} className="inline-flex items-center gap-1.5">
+            <Button
+              onClick={apply}
+              disabled={busy || !preview?.assignments.length}
+              className="inline-flex items-center gap-1.5"
+            >
               <Sparkles className="h-4 w-4" /> Apply & schedule
             </Button>
           )}
@@ -100,9 +130,84 @@ function MatchmakingInner() {
 
       {preview && (
         <p className="text-xs text-muted-foreground">
-          {preview.availablePlayers} player(s) on court today · {preview.availableCourts} free court(s)
-          {preview.queue.length > 0 ? ` · waiting: ${preview.queue.join(", ")}` : ""}
+          {preview.availablePlayers} player(s) on court
+          {preview.includedAbsentCount ? ` · (${preview.includedAbsentCount} absent included)` : ""} ·{" "}
+          {preview.availableCourts} free court(s)
+          {preview.queue.length > 0
+            ? ` · waiting: ${preview.queue
+                .map((q) => (typeof q === "string" ? q : `${q.name}${q.isAbsent ? " (Absent)" : ""}`))
+                .join(", ")}`
+            : ""}
         </p>
+      )}
+
+      {/* Absent Players Controls (When Allowed) */}
+      {preview && preview.allowAbsent && (preview.absentPlayers?.length ?? 0) > 0 && (
+        <Card className="p-4 space-y-3 bg-muted/20 border-primary/20">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-semibold text-sm">Add Absent Players</span>
+                <Badge tone="primary" className="text-[10px]">Allowed by Club</Badge>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Include absent or unregistered members in today&apos;s matchmaking session.
+              </p>
+            </div>
+            <label className="flex items-center gap-2 text-xs font-medium cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={includeAbsent}
+                onChange={(e) => {
+                  const val = e.target.checked;
+                  setIncludeAbsent(val);
+                  void load(val, selectedAbsentIds);
+                }}
+              />
+              Include all absent ({preview.absentPlayers?.length ?? 0})
+            </label>
+          </div>
+
+          {!includeAbsent && (
+            <div className="space-y-1.5 pt-1">
+              <p className="text-[11px] text-muted-foreground">Or add specific absent members:</p>
+              <div className="flex flex-wrap gap-1.5">
+                {preview.absentPlayers?.map((ap) => {
+                  const selected = selectedAbsentIds.includes(ap.id);
+                  return (
+                    <button
+                      key={ap.id}
+                      type="button"
+                      onClick={() => {
+                        const next = selected
+                          ? selectedAbsentIds.filter((id) => id !== ap.id)
+                          : [...selectedAbsentIds, ap.id];
+                        setSelectedAbsentIds(next);
+                        void load(includeAbsent, next);
+                      }}
+                      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium transition-colors border ${
+                        selected
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "bg-background hover:bg-muted text-foreground border-border"
+                      }`}
+                    >
+                      <span>{selected ? "✓" : "+"}</span>
+                      <span>{ap.name}</span>
+                      <span className="text-[10px] opacity-75">({ap.rating})</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </Card>
+      )}
+
+      {preview && !preview.allowAbsent && (
+        <div className="rounded-lg border border-dashed p-3 text-xs text-muted-foreground flex flex-wrap items-center justify-between gap-2">
+          <span>Only checked-in players are included in AI matchmaking.</span>
+          <span className="text-[11px] opacity-80">(Absent players disabled. Club admins can enable in Settings &gt; AI Matchmaking)</span>
+        </div>
       )}
 
       {loading ? (
@@ -138,7 +243,7 @@ function MatchmakingInner() {
           {!loading && (preview?.assignments.length ?? 0) === 0 && (
             <Card className="col-span-full p-10 text-center text-sm text-muted-foreground">
               {(preview?.summary?.reasonIfEmpty as string) ??
-                "Not enough players checked in yet — need at least 4 for doubles."}
+                "Not enough players available — need at least 4 for doubles."}
             </Card>
           )}
         </div>
@@ -154,6 +259,9 @@ function PlayerChip({ player }: { player: SidePlayer }) {
       <Avatar name={player.name} src={withPhoto.photoUrl ?? null} size={26} />
       <span className="text-xs font-medium">{player.name.split(" ")[0]}</span>
       <span className="text-[10px] tabular-nums text-muted-foreground">{player.rating}</span>
+      {player.isAbsent && (
+        <Badge tone="warning" className="text-[9px] px-1 py-0 ml-0.5">Absent</Badge>
+      )}
     </span>
   );
 }
@@ -161,3 +269,4 @@ function PlayerChip({ player }: { player: SidePlayer }) {
 export default function MatchmakingPage() {
   return <MatchmakingInner />;
 }
+

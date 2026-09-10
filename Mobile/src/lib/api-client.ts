@@ -26,7 +26,10 @@ import type {
   MemberItem,
   PenaltyItem,
   PenaltyRule,
-  ClubSettings
+  ClubSettings,
+  ClubDetail,
+  PlayGroupDetail,
+  PlayGroupPostItem
 } from "./types";
 import type { LoginInput } from "./schemas";
 
@@ -124,8 +127,7 @@ export function createApiClient(config: ApiClientConfig) {
 
     // 2. Clubs & Dashboard
     clubs: {
-      get: (clubId: string) =>
-        request<{ id: string; name: string; settings: ClubSettings }>(`/api/clubs/${clubId}`),
+      get: (clubId: string) => request<ClubDetail>(`/api/clubs/${clubId}`),
       dashboard: (clubId: string) => request<AdminStats>(`/api/clubs/${clubId}/dashboard`),
       playerRating: (clubId: string, userId: string) =>
         request<RatingCard>(`/api/clubs/${clubId}/players/${userId}/rating`),
@@ -156,10 +158,13 @@ export function createApiClient(config: ApiClientConfig) {
       },
       history: (clubId: string, userId: string) =>
         request<AttendanceRecord[]>(`/api/clubs/${clubId}/attendance?view=history&userId=${userId}`),
-      checkIn: (clubId: string, data: { status?: string; method?: string; code?: string }) =>
-        request<{ success: boolean }>(`/api/clubs/${clubId}/attendance`, {
+      checkIn: (
+        clubId: string,
+        data?: { method?: "MANUAL" | "QR" | "GPS" | "APP_SELF"; token?: string; lat?: number; lng?: number; status?: string }
+      ) =>
+        request<{ id: string; status: string; method: string }>(`/api/clubs/${clubId}/attendance/checkin`, {
           method: "POST",
-          json: data
+          json: data ?? { method: "MANUAL" }
         })
     },
 
@@ -185,8 +190,30 @@ export function createApiClient(config: ApiClientConfig) {
 
     // 5. Matchmaking
     matchmaking: {
-      generate: (clubId: string, mode: "SINGLES" | "DOUBLES" = "DOUBLES") =>
-        request<MatchmakingPreview>(`/api/clubs/${clubId}/matchmaking/generate?mode=${mode}`)
+      generate: (
+        clubId: string,
+        mode: "SINGLES" | "DOUBLES" = "DOUBLES",
+        options?: { includeAbsent?: boolean; extraPlayerIds?: string[] }
+      ) => {
+        const qs = new URLSearchParams({ mode });
+        if (options?.includeAbsent) qs.set("includeAbsent", "true");
+        if (options?.extraPlayerIds?.length) qs.set("extraPlayerIds", options.extraPlayerIds.join(","));
+        return request<MatchmakingPreview>(`/api/clubs/${clubId}/matchmaking/generate?${qs.toString()}`);
+      },
+      apply: (
+        clubId: string,
+        mode: "SINGLES" | "DOUBLES" = "DOUBLES",
+        options?: { includeAbsent?: boolean; extraPlayerIds?: string[] }
+      ) =>
+        request<{ created: unknown[]; preview: MatchmakingPreview }>(`/api/clubs/${clubId}/matchmaking/generate`, {
+          method: "POST",
+          json: {
+            mode,
+            apply: true,
+            includeAbsent: options?.includeAbsent,
+            extraPlayerIds: options?.extraPlayerIds
+          }
+        })
     },
 
     // 6. Courts & Bookings
@@ -286,7 +313,7 @@ export function createApiClient(config: ApiClientConfig) {
         const qStr = qs.toString();
         return request<PlayGroup[]>(`/api/groups${qStr ? `?${qStr}` : ""}`);
       },
-      get: (groupId: string) => request<PlayGroup & { sessions: PlayGroupSession[] }>(`/api/groups/${groupId}`),
+      get: (groupId: string) => request<PlayGroupDetail>(`/api/groups/${groupId}`),
       create: (data: { name: string; description?: string; city?: string; skillLevel?: string; isPublic?: boolean }) =>
         request<PlayGroup>(`/api/groups`, { method: "POST", json: data }),
       join: (groupId: string) => request<{ id: string }>(`/api/groups/${groupId}/members`, { method: "POST" }),
@@ -297,7 +324,10 @@ export function createApiClient(config: ApiClientConfig) {
         request<{ id: string; status: string }>(`/api/groups/${groupId}/sessions/${sessionId}/rsvp`, {
           method: "POST",
           json: { status }
-        })
+        }),
+      posts: (groupId: string) => request<PlayGroupPostItem[]>(`/api/groups/${groupId}/posts`),
+      createPost: (groupId: string, content: string) =>
+        request<PlayGroupPostItem>(`/api/groups/${groupId}/posts`, { method: "POST", json: { content } })
     }
   };
 }

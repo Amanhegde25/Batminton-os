@@ -125,6 +125,63 @@ export interface PlayGroupSession {
   }[];
 }
 
+export interface PlayGroupMemberItem {
+  id: string;
+  groupId: string;
+  userId: string;
+  role: string;
+  status: string;
+  joinedAt: string;
+  user: {
+    id: string;
+    name: string;
+    photoUrl: string | null;
+    skillLevel: string | null;
+    role?: string;
+  };
+}
+
+export interface PlayGroupPostItem {
+  id: string;
+  groupId: string;
+  userId: string;
+  content: string;
+  createdAt: string;
+  user: {
+    id: string;
+    name: string;
+    photoUrl: string | null;
+  };
+}
+
+export interface PlayGroupDetail extends PlayGroup {
+  createdBy: { id: string; name: string; photoUrl: string | null };
+  members: PlayGroupMemberItem[];
+  sessions: PlayGroupSession[];
+  posts: PlayGroupPostItem[];
+}
+
+export interface ClubDetail {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  city: string | null;
+  address: string | null;
+  logoUrl: string | null;
+  ownerId: string;
+  owner: { id: string; name: string; photoUrl: string | null };
+  subscriptionPlan: string;
+  settings: ClubSettings;
+  features?: string[];
+  counts: {
+    members: number;
+    courts: number;
+    matches: number;
+  };
+  myMembership?: { id: string; role: string; status: string } | null;
+}
+
 export interface RatingCard {
   rating: number;
   peak: number;
@@ -254,6 +311,7 @@ export interface SidePlayer {
   id: string;
   name: string;
   rating: number;
+  isAbsent?: boolean;
 }
 
 export interface MatchmakingAssignment {
@@ -270,10 +328,13 @@ export interface MatchmakingAssignment {
 
 export interface MatchmakingPreview {
   assignments: MatchmakingAssignment[];
-  queue: string[];
+  queue: (string | { id: string; name: string; isAbsent?: boolean })[];
   summary: Record<string, unknown> & { reasonIfEmpty?: string };
   availablePlayers: number;
   availableCourts: number;
+  allowAbsent?: boolean;
+  absentPlayers?: { id: string; name: string; rating: number }[];
+  includedAbsentCount?: number;
 }
 
 // ----------------- Tournament Types -----------------
@@ -373,4 +434,5 @@ export interface ClubSettings {
   };
   booking: { cancellationWindowMinutes: number };
   membership: { monthlyFee: number; autoApprove: boolean };
+  matchmaking?: { allowAbsent: boolean };
 }

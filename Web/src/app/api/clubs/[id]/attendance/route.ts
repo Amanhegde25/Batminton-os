@@ -27,9 +27,13 @@ export const GET = handler(async (req, { params }) => {
   return ok(await attendance.rosterForDay(id, url.searchParams.get("date") ?? undefined));
 });
 
-const manualSchema = z.object({
-  userId: z.string(),
-  status: z.enum(["PRESENT", "ABSENT", "LATE", "GUEST", "EXCUSED"]),
+const postSchema = z.object({
+  userId: z.string().optional(),
+  status: z.enum(["PRESENT", "ABSENT", "LATE", "GUEST", "EXCUSED"]).optional(),
+  method: z.enum(["MANUAL", "QR", "GPS", "APP_SELF"]).optional(),
+  token: z.string().optional(),
+  lat: z.number().optional(),
+  lng: z.number().optional(),
   day: z.string().optional(),
   note: z.string().optional()
 });
@@ -37,7 +41,30 @@ const manualSchema = z.object({
 export const POST = handler(async (req, { params }) => {
   const user = await requireUser(await currentUser());
   const { id } = await params;
-  await requireStaff(id, user);
-  const input = await parseBody(req, manualSchema);
-  return ok(await attendance.markManual(id, user, input));
+  const input = await parseBody(req, postSchema);
+
+  const isTargetingOther = input.userId && input.userId !== user.id;
+  const isSpecialStatus = input.status && input.status !== "PRESENT";
+
+  if (isTargetingOther || isSpecialStatus) {
+    await requireStaff(id, user);
+    return ok(
+      await attendance.markManual(id, user, {
+        userId: input.userId ?? user.id,
+        status: input.status ?? "PRESENT",
+        day: input.day,
+        note: input.note
+      })
+    );
+  }
+
+  const method = input.method === "APP_SELF" || !input.method ? "MANUAL" : input.method;
+  return ok(
+    await attendance.checkIn(
+      id,
+      user.id,
+      { method, token: input.token, lat: input.lat, lng: input.lng },
+      user
+    )
+  );
 });

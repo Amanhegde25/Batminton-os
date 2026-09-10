@@ -6,7 +6,8 @@ import {
   ScrollView,
   TouchableOpacity,
   RefreshControl,
-  ActivityIndicator
+  ActivityIndicator,
+  Alert
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -29,7 +30,8 @@ import {
   Clock,
   ShieldCheck,
   CheckCircle2,
-  MapPin
+  MapPin,
+  Building
 } from "lucide-react-native";
 import { useAuth } from "../../src/context/auth";
 import { useClub } from "../../src/context/club";
@@ -108,20 +110,33 @@ export default function HomeScreen() {
   const checkInMutation = useMutation({
     mutationFn: () =>
       api.attendance.checkIn(activeClubId!, {
-        status: "PRESENT",
-        method: "APP_SELF"
+        method: "MANUAL"
       }),
-    onSuccess: () => {
+    onSuccess: (data) => {
+      const statusText = data?.status === "LATE" ? "Late" : "Present";
+      Alert.alert("Success", `Attendance marked as ${statusText} for today!`);
       void queryClient.invalidateQueries({ queryKey: ["todayAttendance", activeClubId] });
+      void queryClient.invalidateQueries({ queryKey: ["attendanceToday", activeClubId] });
+      void queryClient.invalidateQueries({ queryKey: ["attendanceHistory", activeClubId] });
+    },
+    onError: (err: Error) => {
+      Alert.alert("Check-In Error", err.message || "Failed to mark attendance.");
     }
   });
 
-  const isCheckedIn = attendanceData?.roster?.some(
-    (row) =>
-      row.member?.userId === user?.id &&
-      row.record != null &&
-      ["PRESENT", "LATE", "GUEST"].includes(row.record.status || "")
-  );
+  const isCheckedIn =
+    attendanceData?.roster?.some(
+      (row) =>
+        row.member?.userId === user?.id &&
+        row.record != null &&
+        ["PRESENT", "LATE", "GUEST"].includes(row.record.status || "")
+    ) ||
+    attendanceData?.rows?.some(
+      (row) =>
+        row.userId === user?.id &&
+        row.status != null &&
+        ["PRESENT", "LATE", "GUEST"].includes(row.status || "")
+    );
 
   const [refreshing, setRefreshing] = useState(false);
   const onRefresh = async () => {
@@ -292,8 +307,8 @@ export default function HomeScreen() {
                 <MapPin size={18} color={colors.primary} />
                 <Text style={styles.sectionTitle}>Nearby Clubs</Text>
               </View>
-              <TouchableOpacity onPress={openClubSwitcher}>
-                <Text style={styles.seeAllText}>All Clubs</Text>
+              <TouchableOpacity onPress={() => router.push("/clubs")}>
+                <Text style={styles.seeAllText}>Search & Join →</Text>
               </TouchableOpacity>
             </View>
 
@@ -308,67 +323,78 @@ export default function HomeScreen() {
                 const isPending = club.membership?.status === "PENDING";
 
                 return (
-                  <Card
+                  <TouchableOpacity
                     key={club.id}
-                    style={[
-                      styles.nearbyCard,
-                      isCurrent && styles.nearbyCardActive
-                    ]}
+                    activeOpacity={0.8}
+                    onPress={() => router.push(`/clubs/${club.id}` as any)}
                   >
-                    <View style={styles.nearbyHeaderRow}>
-                      <View style={styles.nearbyDistPill}>
-                        <MapPin size={10} color={colors.primary} />
-                        <Text style={styles.nearbyDistText}>
-                          {club.distanceKm !== null ? `${club.distanceKm} km` : club.city || "Nearby"}
-                        </Text>
+                    <Card
+                      style={[
+                        styles.nearbyCard,
+                        isCurrent && styles.nearbyCardActive
+                      ]}
+                    >
+                      <View style={styles.nearbyHeaderRow}>
+                        <View style={styles.nearbyDistPill}>
+                          <MapPin size={10} color={colors.primary} />
+                          <Text style={styles.nearbyDistText}>
+                            {club.distanceKm !== null ? `${club.distanceKm} km` : club.city || "Nearby"}
+                          </Text>
+                        </View>
+                        <Badge label={club.subscriptionPlan} tone="primary" />
                       </View>
-                      <Badge label={club.subscriptionPlan} tone="primary" />
-                    </View>
 
-                    <Text style={styles.nearbyTitle} numberOfLines={1}>
-                      {club.name}
-                    </Text>
-                    <Text style={styles.nearbySub} numberOfLines={1}>
-                      {club.address || club.city || "Badminton Club"}
-                    </Text>
+                      <Text style={styles.nearbyTitle} numberOfLines={1}>
+                        {club.name}
+                      </Text>
+                      <Text style={styles.nearbySub} numberOfLines={1}>
+                        {club.address || club.city || "Badminton Club"}
+                      </Text>
 
-                    <View style={styles.nearbyMetaRow}>
-                      <Text style={styles.nearbyMetaText}>🏸 {club.courtCount} Courts</Text>
-                      <Text style={styles.nearbyMetaText}>👥 {club.memberCount} Players</Text>
-                    </View>
+                      <View style={styles.nearbyMetaRow}>
+                        <Text style={styles.nearbyMetaText}>🏸 {club.courtCount} Courts</Text>
+                        <Text style={styles.nearbyMetaText}>👥 {club.memberCount} Players</Text>
+                      </View>
 
-                    <View style={styles.nearbyBtnWrapper}>
-                      {isCurrent ? (
-                        <View style={styles.activePill}>
-                          <CheckCircle2 size={12} color={colors.primary} />
-                          <Text style={styles.activePillText}>Active Club</Text>
-                        </View>
-                      ) : isMember ? (
-                        <TouchableOpacity
-                          style={styles.switchBtn}
-                          onPress={() => switchClub(club.id)}
-                        >
-                          <Text style={styles.switchBtnText}>Switch</Text>
-                        </TouchableOpacity>
-                      ) : isPending ? (
-                        <View style={styles.pendingPill}>
-                          <Text style={styles.pendingPillText}>Pending</Text>
-                        </View>
-                      ) : (
-                        <TouchableOpacity
-                          style={styles.joinBtn}
-                          disabled={joiningClubId === club.id}
-                          onPress={() => handleJoinClub(club.id)}
-                        >
-                          {joiningClubId === club.id ? (
-                            <ActivityIndicator size="small" color={colors.primaryForeground} />
-                          ) : (
-                            <Text style={styles.joinBtnText}>Join Club</Text>
-                          )}
-                        </TouchableOpacity>
-                      )}
-                    </View>
-                  </Card>
+                      <View style={styles.nearbyBtnWrapper}>
+                        {isCurrent ? (
+                          <View style={styles.activePill}>
+                            <CheckCircle2 size={12} color={colors.primary} />
+                            <Text style={styles.activePillText}>Active Club</Text>
+                          </View>
+                        ) : isMember ? (
+                          <TouchableOpacity
+                            style={styles.switchBtn}
+                            onPress={(e) => {
+                              e.stopPropagation();
+                              void switchClub(club.id);
+                            }}
+                          >
+                            <Text style={styles.switchBtnText}>Switch</Text>
+                          </TouchableOpacity>
+                        ) : isPending ? (
+                          <View style={styles.pendingPill}>
+                            <Text style={styles.pendingPillText}>Pending</Text>
+                          </View>
+                        ) : (
+                          <TouchableOpacity
+                            style={styles.joinBtn}
+                            disabled={joiningClubId === club.id}
+                            onPress={(e) => {
+                              e.stopPropagation();
+                              void handleJoinClub(club.id);
+                            }}
+                          >
+                            {joiningClubId === club.id ? (
+                              <ActivityIndicator size="small" color={colors.primaryForeground} />
+                            ) : (
+                              <Text style={styles.joinBtnText}>Join Club</Text>
+                            )}
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    </Card>
+                  </TouchableOpacity>
                 );
               })}
             </ScrollView>
@@ -438,6 +464,28 @@ export default function HomeScreen() {
         </View>
 
         <View style={styles.featureGrid}>
+          <TouchableOpacity
+            style={styles.gridCard}
+            onPress={() => router.push("/clubs")}
+          >
+            <View style={[styles.gridIconBox, { backgroundColor: "rgba(16, 185, 129, 0.15)" }]}>
+              <Building size={22} color={colors.primary} />
+            </View>
+            <Text style={styles.gridTitle}>Find Clubs</Text>
+            <Text style={styles.gridSub}>Search & Join</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.gridCard}
+            onPress={() => router.push("/groups")}
+          >
+            <View style={[styles.gridIconBox, { backgroundColor: "rgba(168, 85, 247, 0.15)" }]}>
+              <Sparkles size={22} color="#a855f7" />
+            </View>
+            <Text style={styles.gridTitle}>Play Groups</Text>
+            <Text style={styles.gridSub}>Cross-Club Squads</Text>
+          </TouchableOpacity>
+
           <TouchableOpacity
             style={styles.gridCard}
             onPress={() => router.push("/attendance")}

@@ -125,7 +125,8 @@ function mergeSettings(base: ClubSettings, patch: DeepPartial<ClubSettings>): Cl
     ...patch,
     attendance: { ...base.attendance, ...(patch.attendance ?? {}) },
     booking: { ...base.booking, ...(patch.booking ?? {}) },
-    membership: { ...base.membership, ...(patch.membership ?? {}) }
+    membership: { ...base.membership, ...(patch.membership ?? {}) },
+    matchmaking: { ...(base.matchmaking ?? {}), ...(patch.matchmaking ?? {}) }
   };
 }
 

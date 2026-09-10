@@ -19,6 +19,7 @@ interface ClubSettings {
   };
   booking: { cancellationWindowMinutes: number };
   membership: { monthlyFee: number; autoApprove: boolean };
+  matchmaking?: { allowAbsent: boolean };
 }
 
 function SettingsInner() {
@@ -234,6 +235,23 @@ function SettingsInner() {
                   onChange={(e) => setSettings({ ...settings, attendance: { ...settings.attendance, autoAbsentPenalty: e.target.checked } })}
                 />
                 Auto penalty for absentees on sweep
+              </label>
+            </div>
+
+            <p className="font-semibold">AI Matchmaking</p>
+            <div className="flex flex-wrap gap-6 text-sm">
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={settings.matchmaking?.allowAbsent ?? false}
+                  onChange={(e) =>
+                    setSettings({
+                      ...settings,
+                      matchmaking: { ...(settings.matchmaking ?? {}), allowAbsent: e.target.checked }
+                    })
+                  }
+                />
+                Allow absent players in AI Matchmaking
               </label>
             </div>
 

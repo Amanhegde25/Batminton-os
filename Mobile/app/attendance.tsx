@@ -64,12 +64,13 @@ export default function AttendanceScreen() {
   const checkInMutation = useMutation({
     mutationFn: () =>
       api.attendance.checkIn(activeClubId!, {
-        status: "PRESENT",
-        method: "APP_SELF"
+        method: "MANUAL"
       }),
-    onSuccess: () => {
-      Alert.alert("Success", "Attendance marked as Present for today!");
+    onSuccess: (data) => {
+      const statusText = data?.status === "LATE" ? "Late" : "Present";
+      Alert.alert("Success", `Attendance marked as ${statusText} for today!`);
       void queryClient.invalidateQueries({ queryKey: ["attendanceToday", activeClubId] });
+      void queryClient.invalidateQueries({ queryKey: ["todayAttendance", activeClubId] });
       void queryClient.invalidateQueries({ queryKey: ["attendanceHistory", activeClubId] });
     },
     onError: (err: Error) => {
@@ -90,7 +91,8 @@ export default function AttendanceScreen() {
     [];
 
   const myRecord = roster.find((r) => r.userId === user?.id);
-  const isCheckedIn = myRecord?.status === "PRESENT" || myRecord?.status === "LATE";
+  const isCheckedIn =
+    myRecord?.status === "PRESENT" || myRecord?.status === "LATE" || myRecord?.status === "GUEST";
   const presentCount = roster.filter((r) => r.status === "PRESENT" || r.status === "LATE").length;
 
   return (

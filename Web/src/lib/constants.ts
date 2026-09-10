@@ -143,6 +143,9 @@ export interface ClubSettings {
   };
   booking: { cancellationWindowMinutes: number };
   membership: { monthlyFee: number; autoApprove: boolean };
+  matchmaking?: {
+    allowAbsent: boolean;
+  };
 }
 
 export const DEFAULT_CLUB_SETTINGS: ClubSettings = {
@@ -157,7 +160,10 @@ export const DEFAULT_CLUB_SETTINGS: ClubSettings = {
     minAttendancePct: 60
   },
   booking: { cancellationWindowMinutes: 120 },
-  membership: { monthlyFee: 0, autoApprove: true }
+  membership: { monthlyFee: 0, autoApprove: true },
+  matchmaking: {
+    allowAbsent: false
+  }
 };
 
 export function parseClubSettings(raw: string | null | undefined): ClubSettings {
@@ -172,7 +178,8 @@ export function parseClubSettings(raw: string | null | undefined): ClubSettings 
     ...parsed,
     attendance: { ...DEFAULT_CLUB_SETTINGS.attendance, ...(parsed.attendance ?? {}) },
     booking: { ...DEFAULT_CLUB_SETTINGS.booking, ...(parsed.booking ?? {}) },
-    membership: { ...DEFAULT_CLUB_SETTINGS.membership, ...(parsed.membership ?? {}) }
+    membership: { ...DEFAULT_CLUB_SETTINGS.membership, ...(parsed.membership ?? {}) },
+    matchmaking: { ...DEFAULT_CLUB_SETTINGS.matchmaking, ...(parsed.matchmaking ?? {}) }
   };
 }
 

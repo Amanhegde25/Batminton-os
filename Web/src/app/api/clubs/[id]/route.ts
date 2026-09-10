@@ -1,15 +1,18 @@
 import { ApiError, handler, ok, parseBody } from "@/lib/api";
 import { z } from "zod";
 import { currentUser } from "@/server/auth/session";
-import { getClubContext, isStaffOf, requireStaff, requireUser } from "@/server/rbac";
+import { isStaffOf, requireStaff, requireUser } from "@/server/rbac";
 import { getClubForUser, updateClub } from "@/server/services/clubs";
 import { featuresFor } from "@/lib/constants";
+import { prisma } from "@/server/db";
 
 export const GET = handler(async (_req, { params }) => {
   const user = await requireUser(await currentUser());
   const { id } = await params;
-  await getClubContext(id, user);
   const club = await getClubForUser(id);
+  const membership = await prisma.clubMember.findUnique({
+    where: { clubId_userId: { clubId: id, userId: user.id } }
+  });
   return ok({
     id: club.id,
     name: club.name,
@@ -23,6 +26,9 @@ export const GET = handler(async (_req, { params }) => {
     subscriptionPlan: club.subscriptionPlan,
     settings: JSON.parse(club.settings || "{}"),
     features: featuresFor(club.subscriptionPlan),
+    myMembership: membership && membership.status !== "REMOVED"
+      ? { id: membership.id, role: membership.role, status: membership.status }
+      : null,
     counts: {
       members: club._count.members,
       courts: club._count.courts,
@@ -53,7 +59,8 @@ const patchSchema = z.object({
         })
         .optional(),
       booking: z.object({ cancellationWindowMinutes: z.number().min(0).max(1440).optional() }).optional(),
-      membership: z.object({ monthlyFee: z.number().min(0).optional(), autoApprove: z.boolean().optional() }).optional()
+      membership: z.object({ monthlyFee: z.number().min(0).optional(), autoApprove: z.boolean().optional() }).optional(),
+      matchmaking: z.object({ allowAbsent: z.boolean().optional() }).optional()
     })
     .optional()
 });
