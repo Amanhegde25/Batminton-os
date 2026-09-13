@@ -1,15 +1,20 @@
 import { forwardRef } from "react";
 
 export function Card({ className = "", ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={`rounded-xl border bg-card text-card-foreground shadow-sm ${className}`} {...props} />;
+  return (
+    <div
+      className={`rounded-2xl border border-border/80 bg-card/90 text-card-foreground shadow-sm backdrop-blur-sm transition-all duration-150 ${className}`}
+      {...props}
+    />
+  );
 }
 
 export function CardHeader({ className = "", ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={`flex flex-col space-y-1 p-5 pb-3 ${className}`} {...props} />;
+  return <div className={`flex flex-col space-y-1.5 p-5 pb-3 ${className}`} {...props} />;
 }
 
 export function CardTitle({ className = "", ...props }: React.HTMLAttributes<HTMLHeadingElement>) {
-  return <h3 className={`text-base font-semibold leading-none tracking-tight ${className}`} {...props} />;
+  return <h3 className={`text-base font-semibold leading-snug tracking-tight text-foreground ${className}`} {...props} />;
 }
 
 export function CardDescription({ className = "", ...props }: React.HTMLAttributes<HTMLParagraphElement>) {
@@ -31,7 +36,7 @@ export const Input = forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTML
   return (
     <input
       ref={ref}
-      className={`flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
+      className={`flex h-10 w-full rounded-xl border border-input/80 bg-background/80 px-3.5 py-2 text-sm shadow-sm transition-all placeholder:text-muted-foreground/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:border-primary disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
       {...props}
     />
   );
@@ -44,7 +49,7 @@ export const Select = forwardRef<HTMLSelectElement, React.SelectHTMLAttributes<H
   return (
     <select
       ref={ref}
-      className={`flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
+      className={`flex h-10 w-full rounded-xl border border-input/80 bg-background/80 px-3.5 py-2 text-sm shadow-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:border-primary disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
       {...props}
     >
       {children}
@@ -57,7 +62,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, React.TextareaHTMLAttrib
     return (
       <textarea
         ref={ref}
-        className={`flex min-h-[80px] w-full rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${className}`}
+        className={`flex min-h-[84px] w-full rounded-xl border border-input/80 bg-background/80 px-3.5 py-2.5 text-sm shadow-sm transition-all placeholder:text-muted-foreground/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:border-primary ${className}`}
         {...props}
       />
     );
@@ -65,7 +70,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, React.TextareaHTMLAttrib
 );
 
 export function Label({ className = "", ...props }: React.LabelHTMLAttributes<HTMLLabelElement>) {
-  return <label className={`mb-1.5 block text-sm font-medium leading-none ${className}`} {...props} />;
+  return <label className={`mb-1.5 block text-xs font-semibold uppercase tracking-wider text-muted-foreground ${className}`} {...props} />;
 }
 
 export function Field({
@@ -83,8 +88,8 @@ export function Field({
     <div className="w-full">
       {label && <Label>{label}</Label>}
       {children}
-      {hint && !error && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
-      {error && <p className="mt-1 text-xs text-destructive">{error}</p>}
+      {hint && !error && <p className="mt-1.5 text-xs text-muted-foreground">{hint}</p>}
+      {error && <p className="mt-1.5 text-xs font-medium text-destructive">{error}</p>}
     </div>
   );
 }

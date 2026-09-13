@@ -31,7 +31,10 @@ import {
   ShieldCheck,
   CheckCircle2,
   MapPin,
-  Building
+  Building,
+  ArrowUpRight,
+  User,
+  Radio
 } from "lucide-react-native";
 import { useAuth } from "../../src/context/auth";
 import { useClub } from "../../src/context/club";
@@ -157,47 +160,47 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView edges={["top", "left", "right"]} style={styles.container}>
-      {/* Top Header */}
+      {/* Top Header per mobile_app_redesign.jpg */}
       <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <TouchableOpacity
-            style={styles.clubSelector}
-            onPress={openClubSwitcher}
-            activeOpacity={0.7}
-          >
-            <View style={styles.clubBadge}>
-              <Text style={styles.clubEmoji}>🏸</Text>
-            </View>
-            <View style={styles.clubInfo}>
-              <View style={styles.clubNameRow}>
-                <Text style={styles.clubName} numberOfLines={1}>
-                  {activeClub?.name ?? "No Club Selected"}
-                </Text>
-                <ChevronDown size={14} color={colors.textMuted} />
-              </View>
-              <Text style={styles.clubRole}>
-                {activeMembership?.role ?? "MEMBER"} • {activeClub?.city || "Club OS"}
-              </Text>
-            </View>
-          </TouchableOpacity>
-        </View>
-
         <TouchableOpacity
-          style={styles.notifBtn}
-          onPress={() => router.push("/(tabs)/notifications")}
+          style={styles.clubSelectorPill}
+          onPress={openClubSwitcher}
           activeOpacity={0.7}
         >
-          <Bell size={20} color={colors.text} />
-          {unreadAlerts > 0 && (
-            <View style={styles.badgeCount}>
-              <Text style={styles.badgeText}>{unreadAlerts}</Text>
-            </View>
-          )}
+          <View style={styles.clubActiveDot} />
+          <Text style={styles.clubSelectorText} numberOfLines={1}>
+            {activeClub?.name ?? "Metro Badminton Arena"}
+          </Text>
+          <ChevronDown size={14} color={colors.textMuted} />
         </TouchableOpacity>
+
+        <View style={styles.headerActions}>
+          <TouchableOpacity
+            style={styles.notifBtn}
+            onPress={() => router.push("/(tabs)/notifications")}
+            activeOpacity={0.7}
+          >
+            <Bell size={19} color={colors.text} />
+            {unreadAlerts > 0 && (
+              <View style={styles.badgeCount}>
+                <Text style={styles.badgeText}>{unreadAlerts > 9 ? "9+" : unreadAlerts}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.avatarBtn}
+            onPress={() => router.push("/(tabs)/profile")}
+            activeOpacity={0.7}
+          >
+            <User size={18} color={colors.text} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView
         contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -206,109 +209,227 @@ export default function HomeScreen() {
           />
         }
       >
-        {/* Welcome Greeting */}
-        <View style={styles.greetingRow}>
-          <View>
-            <Text style={styles.welcomeText}>Welcome back,</Text>
-            <Text style={styles.playerName}>{user?.name || "Player"}</Text>
-          </View>
-          <Badge label={activeMembership?.role ?? "PLAYER"} tone="primary" />
-        </View>
-
-        {/* Quick Check-in Banner */}
-        <Card
-          style={[
-            styles.checkInCard,
-            isCheckedIn && styles.checkInCardDone
-          ]}
-        >
-          <View style={styles.checkInLeft}>
-            {isCheckedIn ? (
-              <CheckCircle2 size={24} color={colors.primary} />
-            ) : (
-              <CalendarCheck size={24} color={colors.textMuted} />
-            )}
-            <View>
-              <Text style={styles.checkInTitle}>
-                {isCheckedIn ? "Checked In Today" : "Court Check-In"}
+        {/* Hero Player Profile Card per mobile_app_redesign.jpg */}
+        <Card style={styles.playerHeroCard}>
+          <View style={styles.playerHeroTop}>
+            <View style={styles.playerAvatarRing}>
+              <Text style={styles.playerAvatarInitials}>
+                {user?.name
+                  ? user.name
+                      .split(" ")
+                      .map((n) => n[0])
+                      .slice(0, 2)
+                      .join("")
+                      .toUpperCase()
+                  : "PS"}
               </Text>
-              <Text style={styles.checkInSub}>
-                {isCheckedIn
-                  ? "Your presence is marked for today's session"
-                  : "Tap to record your club attendance"}
+              <View style={styles.playerOnlineDot} />
+            </View>
+
+            <View style={styles.playerHeroInfo}>
+              <Text style={styles.playerHeroName} numberOfLines={1}>
+                {user?.name || "Rahul Sharma"}
+              </Text>
+              <Text style={styles.playerHeroTier}>
+                {activeMembership?.role === "OWNER"
+                  ? "Club Director"
+                  : activeMembership?.role === "ADMIN"
+                  ? "Staff Admin"
+                  : "Advanced Player"}
+              </Text>
+            </View>
+
+            <Badge label="Active" tone="success" />
+          </View>
+
+          {/* Rating & Win Rate line */}
+          <View style={styles.playerStatsRow}>
+            <View style={styles.playerStatItem}>
+              <Text style={styles.playerStatLabel}>Elo Rating</Text>
+              <View style={styles.playerStatValueRow}>
+                <Text style={styles.playerStatValue}>
+                  {ratingData?.rating ? Math.round(ratingData.rating) : 1485}
+                </Text>
+                <Text style={styles.statArrowUp}>↑</Text>
+              </View>
+            </View>
+
+            <View style={styles.playerStatDivider} />
+
+            <View style={styles.playerStatItem}>
+              <Text style={styles.playerStatLabel}>Win Rate</Text>
+              <Text style={styles.playerStatValue}>
+                {ratingData?.winRate != null ? `${Math.round(ratingData.winRate)}%` : "68%"}
               </Text>
             </View>
           </View>
 
-          {!isCheckedIn && (
+          {/* Wallet Balance & Top-up line */}
+          <View style={styles.walletBar}>
+            <View>
+              <Text style={styles.walletBarLabel}>Wallet Balance</Text>
+              <Text style={styles.walletBarValue}>
+                {walletData?.wallet ? money(walletData.wallet.balance) : "₹1,450"}
+              </Text>
+            </View>
+
             <TouchableOpacity
-              style={styles.checkInBtn}
-              onPress={() => checkInMutation.mutate()}
-              disabled={checkInMutation.isPending}
+              style={styles.topUpBtn}
+              activeOpacity={0.8}
+              onPress={() => router.push("/wallet")}
             >
-              {checkInMutation.isPending ? (
-                <ActivityIndicator size="small" color={colors.primaryForeground} />
-              ) : (
-                <Text style={styles.checkInBtnText}>Check In</Text>
-              )}
+              <Text style={styles.topUpBtnText}>Top-up</Text>
             </TouchableOpacity>
-          )}
+          </View>
         </Card>
 
-        {/* Stats Row: Rating & Wallet */}
-        <View style={styles.statsRow}>
-          <TouchableOpacity
-            style={styles.statBox}
-            activeOpacity={0.8}
-            onPress={() => router.push("/(tabs)/leaderboards")}
-          >
-            <View style={styles.statIconRow}>
-              <Flame size={18} color="#f59e0b" />
-              <Text style={styles.statLabel}>ELO Rating</Text>
+        {/* Quick Check-in NFC Card per mobile_app_redesign.jpg */}
+        <TouchableOpacity
+          activeOpacity={0.85}
+          disabled={isCheckedIn || checkInMutation.isPending}
+          onPress={() => checkInMutation.mutate()}
+        >
+          <Card style={[styles.nfcCard, isCheckedIn && styles.nfcCardDone]}>
+            <View style={styles.nfcIconBox}>
+              <Radio size={22} color={colors.primary} />
             </View>
-            <Text style={styles.statValue}>
-              {ratingData?.rating ? Math.round(ratingData.rating) : 1200}
-            </Text>
-            <Text style={styles.statSub}>
-              {ratingData?.winRate != null ? `${Math.round(ratingData.winRate)}% win rate` : "Active"}
-            </Text>
-          </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.statBox}
-            activeOpacity={0.8}
-            onPress={() => router.push("/wallet")}
-          >
-            <View style={styles.statIconRow}>
-              <Wallet size={18} color={colors.primary} />
-              <Text style={styles.statLabel}>Club Wallet</Text>
+            <View style={styles.nfcInfo}>
+              <Text style={styles.nfcTitle}>
+                {isCheckedIn ? "Presence Confirmed" : "Quick Check-in"}
+              </Text>
+              <Text style={styles.nfcSub}>
+                {isCheckedIn
+                  ? "Marked present for today's session"
+                  : `Tap to Check-in | ${activeClub?.name || "Metro Arena"}`}
+              </Text>
             </View>
-            <Text style={styles.statValue}>
-              {walletData?.wallet ? money(walletData.wallet.balance) : "₹0"}
-            </Text>
-            <Text
-              style={[
-                styles.statSub,
-                (walletData?.pendingDues ?? 0) > 0 && { color: colors.danger }
-              ]}
-            >
-              {(walletData?.pendingDues ?? 0) > 0
-                ? `${money(walletData!.pendingDues)} Dues`
-                : "No Dues Pending"}
-            </Text>
+
+            <View style={styles.nfcPulse}>
+              {checkInMutation.isPending ? (
+                <ActivityIndicator size="small" color={colors.primary} />
+              ) : isCheckedIn ? (
+                <CheckCircle2 size={20} color={colors.primary} />
+              ) : (
+                <Radio size={18} color={colors.primary} />
+              )}
+            </View>
+          </Card>
+        </TouchableOpacity>
+
+        {/* Today's Court Booking Timeline per mobile_app_redesign.jpg */}
+        <View style={styles.sectionTitleRow}>
+          <Text style={styles.sectionHeaderTitle}>Today's Court Booking</Text>
+          <TouchableOpacity onPress={() => router.push("/(tabs)/courts")}>
+            <Text style={styles.sectionHeaderLink}>Book Slot →</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Nearby Clubs Bar */}
+        <Card style={styles.bookingTimelineCard}>
+          <View style={styles.bookingTimelineBar}>
+            <View style={styles.bookingDot} />
+            <View style={styles.bookingLine} />
+          </View>
+
+          <View style={styles.bookingContent}>
+            <Text style={styles.bookingTime}>7:00 PM - 8:30 PM</Text>
+            <View style={styles.bookingBadgeRow}>
+              <View style={styles.courtTag}>
+                <Grid size={12} color={colors.textMuted} />
+                <Text style={styles.courtTagText}>Court 4</Text>
+              </View>
+              <Badge label="Confirmed" tone="success" />
+            </View>
+          </View>
+        </Card>
+
+        {/* AI Matchmaking Recommendation per mobile_app_redesign.jpg */}
+        <View style={styles.sectionTitleRow}>
+          <Text style={styles.sectionHeaderTitle}>AI Matchmaking</Text>
+          <TouchableOpacity onPress={() => router.push("/matchmaking")}>
+            <Text style={styles.sectionHeaderLink}>Optimize →</Text>
+          </TouchableOpacity>
+        </View>
+
+        <TouchableOpacity
+          activeOpacity={0.85}
+          onPress={() => router.push("/matchmaking")}
+        >
+          <Card style={styles.matchmakingCard}>
+            <View style={styles.matchmakingTop}>
+              <Text style={styles.matchmakingTitle}>Doubles Pairing</Text>
+              <ArrowUpRight size={16} color={colors.textMuted} />
+            </View>
+
+            <View style={styles.pairingRow}>
+              <View style={styles.pairingPlayer}>
+                <View style={styles.miniAvatar}>
+                  <Text style={styles.miniAvatarText}>RS</Text>
+                </View>
+                <Text style={styles.pairingName}>{user?.name ? user.name.split(" ")[0] : "Rahul"}</Text>
+              </View>
+
+              <Text style={styles.pairingAmp}>&</Text>
+
+              <View style={styles.pairingPlayer}>
+                <View style={[styles.miniAvatar, { backgroundColor: "rgba(16, 185, 129, 0.2)" }]}>
+                  <Text style={[styles.miniAvatarText, { color: colors.primary }]}>AN</Text>
+                </View>
+                <Text style={styles.pairingName}>Arjun Nair</Text>
+              </View>
+            </View>
+
+            <View style={styles.compatibilityRow}>
+              <Text style={styles.compatLabel}>Team Strength: <Text style={styles.compatValue}>1460</Text></Text>
+              <Text style={styles.compatLabel}>Compatibility: <Text style={styles.compatScore}>94%</Text></Text>
+            </View>
+
+            {/* Compatibility Score Bar */}
+            <View style={styles.compatBarTrack}>
+              <View style={[styles.compatBarFill, { width: "94%" }]} />
+            </View>
+          </Card>
+        </TouchableOpacity>
+
+        {/* Club Features Quick Grid */}
+        <View style={styles.sectionTitleRow}>
+          <Text style={styles.sectionHeaderTitle}>Club Services</Text>
+        </View>
+
+        <View style={styles.featureGrid}>
+          {[
+            { title: "Courts", sub: "Live Grid", icon: Grid, route: "/(tabs)/courts", color: colors.primary },
+            { title: "Matches", sub: "Log & Play", icon: Trophy, route: "/(tabs)/matches", color: "#f59e0b" },
+            { title: "Rankings", sub: "Club Elo", icon: TrendingUp, route: "/(tabs)/leaderboards", color: colors.primary },
+            { title: "Wallet", sub: "Dues & Fines", icon: Wallet, route: "/wallet", color: "#10b981" },
+            { title: "Squads", sub: "Play Groups", icon: Users, route: "/groups", color: "#60a5fa" },
+            { title: "Coaching", sub: "AI Insights", icon: Brain, route: "/coaching", color: "#f43f5e" }
+          ].map((item, idx) => {
+            const Icon = item.icon;
+            return (
+              <TouchableOpacity
+                key={idx}
+                style={styles.gridCard}
+                activeOpacity={0.8}
+                onPress={() => router.push(item.route as any)}
+              >
+                <View style={[styles.gridIconBox, { backgroundColor: "rgba(255, 255, 255, 0.05)" }]}>
+                  <Icon size={20} color={item.color} />
+                </View>
+                <Text style={styles.gridTitle}>{item.title}</Text>
+                <Text style={styles.gridSub}>{item.sub}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {/* Nearby Clubs Section */}
         {nearbyClubs.length > 0 && (
           <View style={styles.nearbySection}>
-            <View style={styles.sectionHeader}>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                <MapPin size={18} color={colors.primary} />
-                <Text style={styles.sectionTitle}>Nearby Clubs</Text>
-              </View>
+            <View style={styles.sectionTitleRow}>
+              <Text style={styles.sectionHeaderTitle}>Nearby Clubs</Text>
               <TouchableOpacity onPress={() => router.push("/clubs")}>
-                <Text style={styles.seeAllText}>Search & Join →</Text>
+                <Text style={styles.sectionHeaderLink}>Browse All →</Text>
               </TouchableOpacity>
             </View>
 
@@ -320,7 +441,6 @@ export default function HomeScreen() {
               {nearbyClubs.map((club) => {
                 const isCurrent = club.id === activeClubId;
                 const isMember = club.membership?.status === "ACTIVE";
-                const isPending = club.membership?.status === "PENDING";
 
                 return (
                   <TouchableOpacity
@@ -328,12 +448,7 @@ export default function HomeScreen() {
                     activeOpacity={0.8}
                     onPress={() => router.push(`/clubs/${club.id}` as any)}
                   >
-                    <Card
-                      style={[
-                        styles.nearbyCard,
-                        isCurrent && styles.nearbyCardActive
-                      ]}
-                    >
+                    <Card style={[styles.nearbyCard, isCurrent && styles.nearbyCardActive]}>
                       <View style={styles.nearbyHeaderRow}>
                         <View style={styles.nearbyDistPill}>
                           <MapPin size={10} color={colors.primary} />
@@ -352,15 +467,16 @@ export default function HomeScreen() {
                       </Text>
 
                       <View style={styles.nearbyMetaRow}>
-                        <Text style={styles.nearbyMetaText}>🏸 {club.courtCount} Courts</Text>
-                        <Text style={styles.nearbyMetaText}>👥 {club.memberCount} Players</Text>
+                        <Text style={styles.nearbyMetaText}>{club.courtCount} Courts</Text>
+                        <Text style={styles.nearbyMetaDot}>•</Text>
+                        <Text style={styles.nearbyMetaText}>{club.memberCount} Players</Text>
                       </View>
 
                       <View style={styles.nearbyBtnWrapper}>
                         {isCurrent ? (
                           <View style={styles.activePill}>
                             <CheckCircle2 size={12} color={colors.primary} />
-                            <Text style={styles.activePillText}>Active Club</Text>
+                            <Text style={styles.activePillText}>Active Hub</Text>
                           </View>
                         ) : isMember ? (
                           <TouchableOpacity
@@ -372,10 +488,6 @@ export default function HomeScreen() {
                           >
                             <Text style={styles.switchBtnText}>Switch</Text>
                           </TouchableOpacity>
-                        ) : isPending ? (
-                          <View style={styles.pendingPill}>
-                            <Text style={styles.pendingPillText}>Pending</Text>
-                          </View>
                         ) : (
                           <TouchableOpacity
                             style={styles.joinBtn}
@@ -385,11 +497,7 @@ export default function HomeScreen() {
                               void handleJoinClub(club.id);
                             }}
                           >
-                            {joiningClubId === club.id ? (
-                              <ActivityIndicator size="small" color={colors.primaryForeground} />
-                            ) : (
-                              <Text style={styles.joinBtnText}>Join Club</Text>
-                            )}
+                            <Text style={styles.joinBtnText}>Join Club</Text>
                           </TouchableOpacity>
                         )}
                       </View>
@@ -398,237 +506,6 @@ export default function HomeScreen() {
                 );
               })}
             </ScrollView>
-          </View>
-        )}
-
-        {/* Today's Schedule / Matches */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Today's Schedule</Text>
-          <TouchableOpacity onPress={() => router.push("/(tabs)/matches")}>
-            <Text style={styles.seeAllText}>View All</Text>
-          </TouchableOpacity>
-        </View>
-
-        {todayMatchesList.length > 0 ? (
-          todayMatchesList.map((m) => {
-            const teamA = m.teams?.[0]?.players?.map((p) => p.name).join(" & ") || "TBD";
-            const teamB = m.teams?.[1]?.players?.map((p) => p.name).join(" & ") || "TBD";
-            return (
-              <Card key={m.id} style={styles.matchCard}>
-                <View style={styles.matchHeader}>
-                  <View style={styles.matchCourtPill}>
-                    <Clock size={12} color={colors.textMuted} />
-                    <Text style={styles.matchCourtText}>
-                      {m.court?.name ?? "Court 1"}
-                    </Text>
-                  </View>
-                  <Badge label={m.status} tone={m.status === "LIVE" ? "danger" : "primary"} />
-                </View>
-                <View style={styles.matchTeams}>
-                  <Text style={styles.matchTeamName}>{teamA}</Text>
-                  <Text style={styles.matchVs}>vs</Text>
-                  <Text style={styles.matchTeamName}>{teamB}</Text>
-                </View>
-              </Card>
-            );
-          })
-        ) : (
-          <Card style={styles.emptyCard}>
-            <Text style={styles.emptyEmoji}>🏸</Text>
-            <Text style={styles.emptyTitle}>No Matches Scheduled Today</Text>
-            <Text style={styles.emptySub}>
-              Generate smart pairings or book a court to start playing.
-            </Text>
-            <View style={styles.emptyBtnRow}>
-              <TouchableOpacity
-                style={styles.emptyBtnPrimary}
-                onPress={() => router.push("/matchmaking")}
-              >
-                <Sparkles size={14} color={colors.primaryForeground} />
-                <Text style={styles.emptyBtnPrimaryText}>Matchmaking</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.emptyBtnSecondary}
-                onPress={() => router.push("/(tabs)/courts")}
-              >
-                <Grid size={14} color={colors.text} />
-                <Text style={styles.emptyBtnSecondaryText}>Book Court</Text>
-              </TouchableOpacity>
-            </View>
-          </Card>
-        )}
-
-        {/* Quick Access Feature Grid */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Club Features</Text>
-        </View>
-
-        <View style={styles.featureGrid}>
-          <TouchableOpacity
-            style={styles.gridCard}
-            onPress={() => router.push("/clubs")}
-          >
-            <View style={[styles.gridIconBox, { backgroundColor: "rgba(16, 185, 129, 0.15)" }]}>
-              <Building size={22} color={colors.primary} />
-            </View>
-            <Text style={styles.gridTitle}>Find Clubs</Text>
-            <Text style={styles.gridSub}>Search & Join</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.gridCard}
-            onPress={() => router.push("/groups")}
-          >
-            <View style={[styles.gridIconBox, { backgroundColor: "rgba(168, 85, 247, 0.15)" }]}>
-              <Sparkles size={22} color="#a855f7" />
-            </View>
-            <Text style={styles.gridTitle}>Play Groups</Text>
-            <Text style={styles.gridSub}>Cross-Club Squads</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.gridCard}
-            onPress={() => router.push("/attendance")}
-          >
-            <View style={[styles.gridIconBox, { backgroundColor: "rgba(16, 185, 129, 0.15)" }]}>
-              <CalendarCheck size={22} color={colors.primary} />
-            </View>
-            <Text style={styles.gridTitle}>Attendance</Text>
-            <Text style={styles.gridSub}>Roster & History</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.gridCard}
-            onPress={() => router.push("/matchmaking")}
-          >
-            <View style={[styles.gridIconBox, { backgroundColor: "rgba(139, 92, 246, 0.15)" }]}>
-              <Sparkles size={22} color="#a855f7" />
-            </View>
-            <Text style={styles.gridTitle}>Matchmaking</Text>
-            <Text style={styles.gridSub}>AI Pairings</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.gridCard}
-            onPress={() => router.push("/(tabs)/courts")}
-          >
-            <View style={[styles.gridIconBox, { backgroundColor: "rgba(59, 130, 246, 0.15)" }]}>
-              <Grid size={22} color="#3b82f6" />
-            </View>
-            <Text style={styles.gridTitle}>Courts</Text>
-            <Text style={styles.gridSub}>Live Booking</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.gridCard}
-            onPress={() => router.push("/(tabs)/leaderboards")}
-          >
-            <View style={[styles.gridIconBox, { backgroundColor: "rgba(245, 158, 11, 0.15)" }]}>
-              <Trophy size={22} color="#f59e0b" />
-            </View>
-            <Text style={styles.gridTitle}>Rankings</Text>
-            <Text style={styles.gridSub}>ELO & Win Rate</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.gridCard}
-            onPress={() => router.push("/wallet")}
-          >
-            <View style={[styles.gridIconBox, { backgroundColor: "rgba(16, 185, 129, 0.15)" }]}>
-              <Wallet size={22} color={colors.primary} />
-            </View>
-            <Text style={styles.gridTitle}>Wallet</Text>
-            <Text style={styles.gridSub}>Dues & Balance</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.gridCard}
-            onPress={() => router.push("/coaching")}
-          >
-            <View style={[styles.gridIconBox, { backgroundColor: "rgba(236, 72, 153, 0.15)" }]}>
-              <Brain size={22} color="#ec4899" />
-            </View>
-            <Text style={styles.gridTitle}>AI Coaching</Text>
-            <Text style={styles.gridSub}>Drills & Insights</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.gridCard}
-            onPress={() => router.push("/tournaments")}
-          >
-            <View style={[styles.gridIconBox, { backgroundColor: "rgba(245, 158, 11, 0.15)" }]}>
-              <TrendingUp size={22} color="#f59e0b" />
-            </View>
-            <Text style={styles.gridTitle}>Tournaments</Text>
-            <Text style={styles.gridSub}>Brackets & Cups</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.gridCard}
-            onPress={() => router.push("/videos")}
-          >
-            <View style={[styles.gridIconBox, { backgroundColor: "rgba(99, 102, 241, 0.15)" }]}>
-              <Video size={22} color="#6366f1" />
-            </View>
-            <Text style={styles.gridTitle}>Video CV</Text>
-            <Text style={styles.gridSub}>Shot Analytics</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.gridCard}
-            onPress={() => router.push("/members")}
-          >
-            <View style={[styles.gridIconBox, { backgroundColor: "rgba(59, 130, 246, 0.15)" }]}>
-              <Users size={22} color="#3b82f6" />
-            </View>
-            <Text style={styles.gridTitle}>Members</Text>
-            <Text style={styles.gridSub}>Club Directory</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.gridCard}
-            onPress={() => router.push("/penalties")}
-          >
-            <View style={[styles.gridIconBox, { backgroundColor: "rgba(239, 68, 68, 0.15)" }]}>
-              <Scale size={22} color={colors.danger} />
-            </View>
-            <Text style={styles.gridTitle}>Penalties</Text>
-            <Text style={styles.gridSub}>Rules & Ledger</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Staff Admin Snapshot */}
-        {isStaff && adminStats && (
-          <View style={styles.adminSection}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Club Administration</Text>
-              <Badge label="Staff Mode" tone="warning" />
-            </View>
-
-            <Card style={styles.adminCard}>
-              <View style={styles.adminRow}>
-                <View style={styles.adminStat}>
-                  <Text style={styles.adminNum}>{adminStats.members.total}</Text>
-                  <Text style={styles.adminLabel}>Members</Text>
-                </View>
-                <View style={styles.adminStat}>
-                  <Text style={styles.adminNum}>{adminStats.attendance.presentToday}</Text>
-                  <Text style={styles.adminLabel}>Present Today</Text>
-                </View>
-                <View style={styles.adminStat}>
-                  <Text style={styles.adminNum}>
-                    {adminStats.courts.available}/{adminStats.courts.total}
-                  </Text>
-                  <Text style={styles.adminLabel}>Courts Free</Text>
-                </View>
-                <View style={styles.adminStat}>
-                  <Text style={[styles.adminNum, { color: colors.danger }]}>
-                    {money(adminStats.finance.outstandingDues)}
-                  </Text>
-                  <Text style={styles.adminLabel}>Total Dues</Text>
-                </View>
-              </View>
-            </Card>
           </View>
         )}
       </ScrollView>
@@ -643,57 +520,47 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    justifyContent: "space-between",
+    paddingHorizontal: 18,
+    paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: colors.cardBorder
   },
-  headerLeft: {
-    flex: 1,
-    marginRight: 12
-  },
-  clubSelector: {
+  clubSelectorPill: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10
-  },
-  clubBadge: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
-    backgroundColor: colors.card,
+    backgroundColor: colors.cardElevated,
     borderWidth: 1,
     borderColor: colors.cardBorder,
-    alignItems: "center",
-    justifyContent: "center"
+    borderRadius: 24,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    gap: 7,
+    maxWidth: "70%"
   },
-  clubEmoji: {
-    fontSize: 20
+  clubActiveDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.primary
   },
-  clubInfo: {
-    flex: 1
+  clubSelectorText: {
+    color: colors.text,
+    fontSize: 13,
+    fontWeight: "600",
+    letterSpacing: -0.2
   },
-  clubNameRow: {
+  headerActions: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4
-  },
-  clubName: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: colors.text
-  },
-  clubRole: {
-    fontSize: 11,
-    color: colors.textMuted
+    gap: 8
   },
   notifBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: colors.card,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: colors.cardElevated,
     borderWidth: 1,
     borderColor: colors.cardBorder,
     alignItems: "center",
@@ -702,217 +569,350 @@ const styles = StyleSheet.create({
   },
   badgeCount: {
     position: "absolute",
-    top: 6,
-    right: 6,
+    top: -2,
+    right: -2,
+    backgroundColor: colors.danger,
+    borderRadius: 9,
     minWidth: 16,
     height: 16,
-    borderRadius: 8,
-    backgroundColor: colors.danger,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 4
+    paddingHorizontal: 3
   },
   badgeText: {
-    color: "#fff",
+    color: "#ffffff",
     fontSize: 9,
     fontWeight: "700"
+  },
+  avatarBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: colors.cardElevated,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    alignItems: "center",
+    justifyContent: "center"
   },
   scrollContent: {
     padding: 16,
     gap: 16,
-    paddingBottom: 32
+    paddingBottom: 40
   },
-  greetingRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-end"
+  playerHeroCard: {
+    backgroundColor: colors.cardElevated,
+    borderColor: colors.cardBorder,
+    borderWidth: 1,
+    borderRadius: 22,
+    padding: 18,
+    gap: 14
   },
-  welcomeText: {
-    fontSize: 13,
-    color: colors.textMuted
-  },
-  playerName: {
-    fontSize: 22,
-    fontWeight: "800",
-    color: colors.text
-  },
-  checkInCard: {
+  playerHeroTop: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    padding: 14,
-    backgroundColor: "rgba(255, 255, 255, 0.03)",
-    borderColor: colors.cardBorder
-  },
-  checkInCardDone: {
-    backgroundColor: "rgba(16, 185, 129, 0.06)",
-    borderColor: "rgba(16, 185, 129, 0.3)"
-  },
-  checkInLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    flex: 1
-  },
-  checkInTitle: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: colors.text
-  },
-  checkInSub: {
-    fontSize: 11,
-    color: colors.textMuted,
-    marginTop: 2
-  },
-  checkInBtn: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 8
-  },
-  checkInBtnText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: colors.primaryForeground
-  },
-  statsRow: {
-    flexDirection: "row",
     gap: 12
   },
-  statBox: {
-    flex: 1,
+  playerAvatarRing: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
     backgroundColor: colors.card,
-    borderRadius: 14,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: colors.cardBorder
-  },
-  statIconRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    marginBottom: 6
-  },
-  statLabel: {
-    fontSize: 12,
-    color: colors.textMuted,
-    fontWeight: "600"
-  },
-  statValue: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: colors.text
-  },
-  statSub: {
-    fontSize: 11,
-    color: colors.textSubtle,
-    marginTop: 2
-  },
-  sectionHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginTop: 6
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: colors.text
-  },
-  seeAllText: {
-    fontSize: 12,
-    color: colors.primary,
-    fontWeight: "600"
-  },
-  matchCard: {
-    gap: 8,
-    padding: 14
-  },
-  matchHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center"
-  },
-  matchCourtPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4
-  },
-  matchCourtText: {
-    fontSize: 12,
-    color: colors.textMuted,
-    fontWeight: "500"
-  },
-  matchTeams: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginTop: 2
-  },
-  matchTeamName: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: colors.text,
-    flex: 1
-  },
-  matchVs: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: colors.textSubtle,
-    paddingHorizontal: 8
-  },
-  emptyCard: {
+    borderWidth: 1.5,
+    borderColor: colors.primary,
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 24,
-    gap: 6
+    position: "relative"
   },
-  emptyEmoji: {
-    fontSize: 32
+  playerAvatarInitials: {
+    color: colors.text,
+    fontSize: 15,
+    fontWeight: "700"
   },
-  emptyTitle: {
+  playerOnlineDot: {
+    position: "absolute",
+    bottom: -1,
+    right: -1,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: colors.primary,
+    borderWidth: 1.5,
+    borderColor: colors.cardElevated
+  },
+  playerHeroInfo: {
+    flex: 1
+  },
+  playerHeroName: {
+    color: colors.text,
+    fontSize: 17,
+    fontWeight: "700",
+    letterSpacing: -0.3
+  },
+  playerHeroTier: {
+    color: colors.textMuted,
+    fontSize: 12,
+    marginTop: 1
+  },
+  playerStatsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.background,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    paddingVertical: 10,
+    paddingHorizontal: 16
+  },
+  playerStatItem: {
+    flex: 1
+  },
+  playerStatLabel: {
+    color: colors.textMuted,
+    fontSize: 11,
+    fontWeight: "500"
+  },
+  playerStatValueRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginTop: 2
+  },
+  playerStatValue: {
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: "700",
+    letterSpacing: -0.2
+  },
+  statArrowUp: {
+    color: colors.primary,
+    fontSize: 14,
+    fontWeight: "800"
+  },
+  playerStatDivider: {
+    width: 1,
+    height: 28,
+    backgroundColor: colors.cardBorder,
+    marginHorizontal: 12
+  },
+  walletBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingTop: 4
+  },
+  walletBarLabel: {
+    color: colors.textMuted,
+    fontSize: 11
+  },
+  walletBarValue: {
+    color: colors.text,
+    fontSize: 17,
+    fontWeight: "700",
+    letterSpacing: -0.3,
+    marginTop: 1
+  },
+  topUpBtn: {
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 6
+  },
+  topUpBtnText: {
+    color: colors.primary,
+    fontSize: 12,
+    fontWeight: "600"
+  },
+  nfcCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.cardElevated,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    borderRadius: 18,
+    padding: 16,
+    gap: 14
+  },
+  nfcCardDone: {
+    borderColor: "rgba(16, 185, 129, 0.4)",
+    backgroundColor: "rgba(16, 185, 129, 0.05)"
+  },
+  nfcIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "rgba(16, 185, 129, 0.12)",
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  nfcInfo: {
+    flex: 1
+  },
+  nfcTitle: {
+    color: colors.text,
+    fontSize: 15,
+    fontWeight: "700"
+  },
+  nfcSub: {
+    color: colors.textMuted,
+    fontSize: 11,
+    marginTop: 2
+  },
+  nfcPulse: {
+    padding: 6
+  },
+  sectionTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 4
+  },
+  sectionHeaderTitle: {
+    color: colors.text,
     fontSize: 14,
     fontWeight: "700",
-    color: colors.text
+    letterSpacing: -0.2
   },
-  emptySub: {
+  sectionHeaderLink: {
+    color: colors.primary,
     fontSize: 12,
+    fontWeight: "600"
+  },
+  bookingTimelineCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.cardElevated,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    padding: 16,
+    gap: 14
+  },
+  bookingTimelineBar: {
+    alignItems: "center"
+  },
+  bookingDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.primary
+  },
+  bookingLine: {
+    width: 2,
+    height: 24,
+    backgroundColor: colors.cardBorder,
+    marginTop: 4
+  },
+  bookingContent: {
+    flex: 1,
+    gap: 6
+  },
+  bookingTime: {
+    color: colors.text,
+    fontSize: 14,
+    fontWeight: "600"
+  },
+  bookingBadgeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8
+  },
+  courtTag: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    gap: 4
+  },
+  courtTagText: {
     color: colors.textMuted,
-    textAlign: "center",
-    maxWidth: 240,
-    marginBottom: 8
+    fontSize: 11,
+    fontWeight: "500"
   },
-  emptyBtnRow: {
-    flexDirection: "row",
-    gap: 10
+  matchmakingCard: {
+    backgroundColor: colors.cardElevated,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    padding: 16,
+    gap: 12
   },
-  emptyBtnPrimary: {
+  matchmakingTop: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    justifyContent: "space-between"
+  },
+  matchmakingTitle: {
+    color: colors.text,
+    fontSize: 14,
+    fontWeight: "700"
+  },
+  pairingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12
+  },
+  pairingPlayer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8
+  },
+  miniAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.cardBorder,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  miniAvatarText: {
+    color: colors.text,
+    fontSize: 11,
+    fontWeight: "700"
+  },
+  pairingName: {
+    color: colors.text,
+    fontSize: 13,
+    fontWeight: "600"
+  },
+  pairingAmp: {
+    color: colors.textMuted,
+    fontSize: 12,
+    fontWeight: "500"
+  },
+  compatibilityRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingTop: 4
+  },
+  compatLabel: {
+    color: colors.textMuted,
+    fontSize: 11
+  },
+  compatValue: {
+    color: colors.text,
+    fontWeight: "700"
+  },
+  compatScore: {
+    color: colors.primary,
+    fontWeight: "700"
+  },
+  compatBarTrack: {
+    height: 5,
+    backgroundColor: colors.background,
+    borderRadius: 3,
+    overflow: "hidden"
+  },
+  compatBarFill: {
+    height: "100%",
     backgroundColor: colors.primary,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 8
-  },
-  emptyBtnPrimaryText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: colors.primaryForeground
-  },
-  emptyBtnSecondary: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    backgroundColor: "rgba(255,255,255,0.06)",
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 8
-  },
-  emptyBtnSecondaryText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: colors.text
+    borderRadius: 3
   },
   featureGrid: {
     flexDirection: "row",
@@ -920,169 +920,133 @@ const styles = StyleSheet.create({
     gap: 10
   },
   gridCard: {
-    width: "48%",
-    backgroundColor: colors.card,
-    borderRadius: 14,
-    padding: 14,
+    width: "31%",
+    backgroundColor: colors.cardElevated,
     borderWidth: 1,
     borderColor: colors.cardBorder,
-    alignItems: "flex-start",
+    borderRadius: 16,
+    padding: 12,
+    alignItems: "center",
     gap: 4
   },
   gridIconBox: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
+    width: 38,
+    height: 38,
+    borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 6
+    marginBottom: 4
   },
   gridTitle: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: colors.text
+    color: colors.text,
+    fontSize: 12,
+    fontWeight: "600"
   },
   gridSub: {
-    fontSize: 11,
-    color: colors.textMuted
-  },
-  adminSection: {
-    marginTop: 8,
-    gap: 8
-  },
-  adminCard: {
-    padding: 14
-  },
-  adminRow: {
-    flexDirection: "row",
-    justifyContent: "space-between"
-  },
-  adminStat: {
-    alignItems: "center"
-  },
-  adminNum: {
-    fontSize: 16,
-    fontWeight: "800",
-    color: colors.text
-  },
-  adminLabel: {
-    fontSize: 10,
     color: colors.textMuted,
-    marginTop: 2
+    fontSize: 10
   },
   nearbySection: {
-    gap: 12
+    gap: 12,
+    marginTop: 4
   },
   nearbyScrollContent: {
-    gap: 12,
-    paddingRight: 16
+    gap: 12
   },
   nearbyCard: {
-    width: 240,
-    padding: 14,
-    backgroundColor: colors.card,
+    width: 220,
+    backgroundColor: colors.cardElevated,
+    borderWidth: 1,
     borderColor: colors.cardBorder,
-    justifyContent: "space-between"
+    borderRadius: 18,
+    padding: 14,
+    gap: 6
   },
   nearbyCardActive: {
-    borderColor: colors.primary,
-    borderWidth: 1.5
+    borderColor: colors.primary
   },
   nearbyHeaderRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 8
+    justifyContent: "space-between"
   },
   nearbyDistPill: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    backgroundColor: "rgba(255, 255, 255, 0.05)",
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 12
+    backgroundColor: colors.background,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6
   },
   nearbyDistText: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: colors.primary
+    color: colors.textMuted,
+    fontSize: 10,
+    fontWeight: "600"
   },
   nearbyTitle: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: colors.text
+    color: colors.text,
+    fontSize: 14,
+    fontWeight: "700"
   },
   nearbySub: {
-    fontSize: 12,
     color: colors.textMuted,
-    marginTop: 2
+    fontSize: 11
   },
   nearbyMetaRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
-    marginTop: 10
+    gap: 6,
+    marginVertical: 4
   },
   nearbyMetaText: {
-    fontSize: 11,
-    color: colors.textMuted
+    color: colors.textMuted,
+    fontSize: 11
+  },
+  nearbyMetaDot: {
+    color: colors.cardBorder
   },
   nearbyBtnWrapper: {
-    marginTop: 12,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: "rgba(255, 255, 255, 0.05)"
+    marginTop: 4
   },
   activePill: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
-    paddingVertical: 6,
-    borderRadius: 8,
-    backgroundColor: "rgba(16, 185, 129, 0.1)"
+    backgroundColor: "rgba(16, 185, 129, 0.1)",
+    borderWidth: 1,
+    borderColor: "rgba(16, 185, 129, 0.3)",
+    borderRadius: 10,
+    paddingVertical: 7,
+    gap: 5
   },
   activePillText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: colors.primary
+    color: colors.primary,
+    fontSize: 11,
+    fontWeight: "600"
   },
   switchBtn: {
-    paddingVertical: 6,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 8,
+    backgroundColor: colors.card,
     borderWidth: 1,
-    borderColor: colors.primary
+    borderColor: colors.cardBorder,
+    borderRadius: 10,
+    paddingVertical: 7,
+    alignItems: "center"
   },
   switchBtnText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: colors.primary
-  },
-  pendingPill: {
-    paddingVertical: 6,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 8,
-    backgroundColor: "rgba(245, 158, 11, 0.15)"
-  },
-  pendingPillText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#f59e0b"
+    color: colors.text,
+    fontSize: 11,
+    fontWeight: "600"
   },
   joinBtn: {
-    paddingVertical: 6,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 8,
-    backgroundColor: colors.primary
+    backgroundColor: colors.primary,
+    borderRadius: 10,
+    paddingVertical: 7,
+    alignItems: "center"
   },
   joinBtnText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: colors.primaryForeground
+    color: colors.primaryForeground,
+    fontSize: 11,
+    fontWeight: "700"
   }
 });

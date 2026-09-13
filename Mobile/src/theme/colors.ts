@@ -1,21 +1,24 @@
 export const colors = {
-  background: "#09090b",
-  card: "#18181b",
-  cardBorder: "#27272a",
+  background: "#09090b", // Off-Black Zinc-950 (never pure #000000)
+  card: "#121215",       // Surface Dark Slate
+  cardElevated: "#18181b", // Elevated Card surface
+  cardBorder: "#27272a", // Hairline Border
+  cardBorderSubtle: "rgba(255, 255, 255, 0.08)",
   cardHover: "#27272a",
   
-  text: "#fafafa",
-  textMuted: "#a1a1aa",
-  textSubtle: "#71717a",
+  text: "#f4f4f5",       // Zinc-100 High Contrast Text
+  textMuted: "#a1a1aa",  // Zinc-400 Muted Text
+  textSubtle: "#71717a", // Zinc-500 Subtle Text
   
-  primary: "#10b981", // Emerald green (badminton court / badminton OS primary)
+  primary: "#10b981",    // Court Emerald Accent
   primaryForeground: "#042f2e",
   primaryLight: "rgba(16, 185, 129, 0.12)",
+  primaryGlow: "rgba(16, 185, 129, 0.22)",
   
   secondary: "#27272a",
-  secondaryForeground: "#fafafa",
+  secondaryForeground: "#f4f4f5",
   
-  accent: "#06b6d4",
+  accent: "#10b981",
   danger: "#ef4444",
   dangerLight: "rgba(239, 68, 68, 0.15)",
   warning: "#f59e0b",
@@ -23,11 +26,11 @@ export const colors = {
   success: "#10b981",
   successLight: "rgba(16, 185, 129, 0.15)",
   
-  inputBg: "#18181b",
+  inputBg: "#121215",
   inputBorder: "#27272a",
   
-  tabBar: "#09090b",
-  tabBarBorder: "#27272a",
+  tabBar: "#0c0c0e",
+  tabBarBorder: "#222226",
   tabActive: "#10b981",
   tabInactive: "#71717a"
 };

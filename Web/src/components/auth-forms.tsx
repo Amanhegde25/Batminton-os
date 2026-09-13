@@ -148,18 +148,20 @@ export function LoginForm() {
             </Field>
           </>
         )}
-        <Button type="submit" disabled={busy} className="w-full">
-          {busy ? "Signing in…" : "Sign in"}
-        </Button>
+        <div className="pt-2">
+          <Button type="submit" disabled={busy} className="w-full">
+            {busy ? "Signing in…" : "Sign in"}
+          </Button>
+        </div>
       </form>
 
-      <div className="mt-4 space-y-2 text-center text-sm">
+      <div className="mt-6 space-y-3 text-center text-sm">
         {mode === "password" ? (
-          <button type="button" className="text-primary hover:underline" onClick={() => setMode("otp")}>
+          <button type="button" className="text-primary font-medium hover:underline" onClick={() => setMode("otp")}>
             Sign in with phone OTP instead
           </button>
         ) : (
-          <button type="button" className="text-primary hover:underline" onClick={() => setMode("password")}>
+          <button type="button" className="text-primary font-medium hover:underline" onClick={() => setMode("password")}>
             Use email/mobile & password instead
           </button>
         )}
@@ -168,9 +170,9 @@ export function LoginForm() {
             Forgot password?
           </Link>
         </div>
-        <p className="text-muted-foreground">
+        <p className="text-muted-foreground pt-1">
           New here?{" "}
-          <Link href="/register" className="text-primary hover:underline">
+          <Link href="/register" className="text-primary font-medium hover:underline">
             Create an account
           </Link>
         </p>
@@ -178,12 +180,12 @@ export function LoginForm() {
 
       {mode === "password" && (
         <>
-          <div className="my-5 flex items-center gap-3 text-xs text-muted-foreground">
-            <div className="h-px flex-1 bg-border" /> or <div className="h-px flex-1 bg-border" />
+          <div className="my-6 flex items-center gap-3 text-xs text-muted-foreground">
+            <div className="h-px flex-1 bg-border/80" /> or <div className="h-px flex-1 bg-border/80" />
           </div>
           <a
             href="/api/auth/google/callback"
-            className="flex h-10 w-full items-center justify-center gap-2 rounded-lg border bg-background text-sm font-medium shadow-sm hover:bg-muted"
+            className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-border/80 bg-background/80 text-sm font-medium shadow-sm hover:bg-muted/70 transition-all"
           >
             <svg width="16" height="16" viewBox="0 0 48 48">
               <path fill="#FFC107" d="M43.6 20.1H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3l5.7-5.7C34.3 6.1 29.4 4 24 4 13 4 4 13 4 24s9 20 20 20 20-9 20-20c0-1.3-.1-2.6-.4-3.9z" />
@@ -267,13 +269,15 @@ export function RegisterForm() {
             placeholder="••••••••"
           />
         </Field>
-        <Button type="submit" disabled={busy} className="w-full">
-          {busy ? "Creating…" : "Create account"}
-        </Button>
+        <div className="pt-2">
+          <Button type="submit" disabled={busy} className="w-full">
+            {busy ? "Creating…" : "Create account"}
+          </Button>
+        </div>
       </form>
-      <p className="mt-4 text-center text-sm text-muted-foreground">
+      <p className="mt-6 text-center text-sm text-muted-foreground">
         Already have an account?{" "}
-        <Link href="/login" className="text-primary hover:underline">
+        <Link href="/login" className="text-primary font-medium hover:underline">
           Sign in
         </Link>
       </p>
@@ -325,11 +329,13 @@ export function ForgotForm() {
           <Field label="Email" error={error}>
             <Input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@club.com" />
           </Field>
-          <Button type="submit" disabled={busy} className="w-full">
-            {busy ? "Sending…" : "Send reset link"}
-          </Button>
-          <p className="text-center text-sm text-muted-foreground">
-            <Link href="/login" className="hover:text-foreground">
+          <div className="pt-2">
+            <Button type="submit" disabled={busy} className="w-full">
+              {busy ? "Sending…" : "Send reset link"}
+            </Button>
+          </div>
+          <p className="mt-6 text-center text-sm text-muted-foreground">
+            <Link href="/login" className="text-primary font-medium hover:underline">
               Back to sign in
             </Link>
           </p>
@@ -373,9 +379,11 @@ export function ResetForm({ token }: { token: string }) {
         <Field label="Confirm password">
           <Input type="password" required value={confirm} onChange={(e) => setConfirm(e.target.value)} />
         </Field>
-        <Button type="submit" disabled={busy || !token} className="w-full">
-          {busy ? "Saving…" : token ? "Reset password" : "Invalid or missing token"}
-        </Button>
+        <div className="pt-2">
+          <Button type="submit" disabled={busy || !token} className="w-full">
+            {busy ? "Saving…" : token ? "Reset password" : "Invalid or missing token"}
+          </Button>
+        </div>
       </form>
     </AuthShell>
   );

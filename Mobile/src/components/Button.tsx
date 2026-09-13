@@ -10,7 +10,7 @@ import { colors } from "../theme/colors";
 
 interface ButtonProps extends TouchableOpacityProps {
   title: string;
-  variant?: "primary" | "outline" | "danger";
+  variant?: "primary" | "outline" | "danger" | "secondary";
   loading?: boolean;
   icon?: React.ReactNode;
 }
@@ -26,14 +26,21 @@ export function Button({
 }: ButtonProps) {
   const isOutline = variant === "outline";
   const isDanger = variant === "danger";
+  const isSecondary = variant === "secondary";
 
   return (
     <TouchableOpacity
-      activeOpacity={0.8}
+      activeOpacity={0.75}
       disabled={disabled || loading}
       style={[
         styles.base,
-        isOutline ? styles.outline : isDanger ? styles.danger : styles.primary,
+        isOutline
+          ? styles.outline
+          : isDanger
+          ? styles.danger
+          : isSecondary
+          ? styles.secondary
+          : styles.primary,
         (disabled || loading) && styles.disabled,
         style
       ]}
@@ -54,6 +61,8 @@ export function Button({
                 ? styles.textOutline
                 : isDanger
                 ? styles.textDanger
+                : isSecondary
+                ? styles.textSecondary
                 : styles.textPrimary
             ]}
           >
@@ -68,11 +77,11 @@ export function Button({
 const styles = StyleSheet.create({
   base: {
     height: 48,
-    borderRadius: 10,
+    borderRadius: 14,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 16,
+    paddingHorizontal: 18,
     gap: 8
   },
   primary: {
@@ -83,6 +92,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.cardBorder
   },
+  secondary: {
+    backgroundColor: colors.secondary,
+    borderWidth: 1,
+    borderColor: colors.cardBorder
+  },
   danger: {
     backgroundColor: colors.danger
   },
@@ -90,13 +104,17 @@ const styles = StyleSheet.create({
     opacity: 0.5
   },
   text: {
-    fontSize: 15,
-    fontWeight: "600"
+    fontSize: 14,
+    fontWeight: "600",
+    letterSpacing: -0.2
   },
   textPrimary: {
     color: colors.primaryForeground
   },
   textOutline: {
+    color: colors.text
+  },
+  textSecondary: {
     color: colors.text
   },
   textDanger: {

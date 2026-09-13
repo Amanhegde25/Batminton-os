@@ -1,5 +1,16 @@
 import type { Metadata, Viewport } from "next";
+import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+
+const geistSans = Geist({
+  variable: "--font-geist-sans",
+  subsets: ["latin"]
+});
+
+const geistMono = Geist_Mono({
+  variable: "--font-geist-mono",
+  subsets: ["latin"]
+});
 
 export const metadata: Metadata = {
   title: { default: "Badminton Club OS", template: "%s · Badminton Club OS" },
@@ -12,7 +23,7 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#f8faf9" },
-    { media: "(prefers-color-scheme: dark)", color: "#0c1a17" }
+    { media: "(prefers-color-scheme: dark)", color: "#09090b" }
   ]
 };
 
@@ -20,11 +31,11 @@ const themeScript = `(function(){try{var t=localStorage.getItem("bcos-theme");if
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning className={`${geistSans.variable} ${geistMono.variable}`}>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
-      <body className="min-h-screen">{children}</body>
+      <body className="min-h-screen bg-background text-foreground font-sans antialiased">{children}</body>
     </html>
   );
 }
