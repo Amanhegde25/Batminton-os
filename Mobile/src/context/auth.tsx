@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useMemo } from "react";
 import type { SessionUser } from "../lib/types";
-import type { LoginInput } from "../lib/schemas";
+import type { LoginInput, RegisterInput } from "../lib/schemas";
 import { api, AUTH_TOKEN_KEY, USER_INFO_KEY, setUnauthorizedHandler } from "../lib/api";
 import { storage } from "../lib/storage";
 
@@ -9,6 +9,8 @@ interface AuthContextType {
   token: string | null;
   isLoading: boolean;
   signIn: (input: LoginInput) => Promise<void>;
+  signUp: (input: RegisterInput) => Promise<void>;
+  updateUser: (user: SessionUser) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -52,6 +54,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(res.user);
   }
 
+  async function signUp(input: RegisterInput) {
+    const res = await api.auth.register(input);
+    if (res.token) {
+      await storage.setItemAsync(AUTH_TOKEN_KEY, res.token);
+      setToken(res.token);
+    }
+    await storage.setItemAsync(USER_INFO_KEY, JSON.stringify(res.user));
+    setUser(res.user);
+  }
+
+  async function updateUser(updated: SessionUser) {
+    await storage.setItemAsync(USER_INFO_KEY, JSON.stringify(updated));
+    setUser(updated);
+  }
+
   async function signOut() {
     try {
       await api.auth.logout();
@@ -65,7 +82,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   const value = useMemo(
-    () => ({ user, token, isLoading, signIn, signOut }),
+    () => ({ user, token, isLoading, signIn, signUp, updateUser, signOut }),
     [user, token, isLoading]
   );
 

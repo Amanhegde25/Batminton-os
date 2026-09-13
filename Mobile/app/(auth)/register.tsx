@@ -14,41 +14,57 @@ import { useRouter } from "expo-router";
 import { useAuth } from "../../src/context/auth";
 import { colors } from "../../src/theme/colors";
 import { Button } from "../../src/components/Button";
-import { loginSchema } from "../../src/lib/schemas";
-import { getBaseApiUrl } from "../../src/lib/api";
+import { registerSchema } from "../../src/lib/schemas";
 
-export default function LoginScreen() {
+export default function RegisterScreen() {
   const router = useRouter();
-  const { signIn } = useAuth();
-  const [identifier, setIdentifier] = useState("");
+  const { signUp } = useAuth();
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [mobile, setMobile] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  async function handleLogin() {
+  async function handleRegister() {
     setErrorMessage(null);
-    const result = loginSchema.safeParse({ identifier, password });
-    if (!result.success) {
-      setErrorMessage(result.error.issues[0]?.message ?? "Invalid credentials");
+
+    const trimmedEmail = email.trim();
+    const trimmedMobile = mobile.trim();
+
+    if (!trimmedEmail && !trimmedMobile) {
+      setErrorMessage("Please provide either an email address or a mobile number.");
+      return;
+    }
+
+    const validation = registerSchema.safeParse({
+      name: name.trim(),
+      email: trimmedEmail || undefined,
+      mobile: trimmedMobile || undefined,
+      password
+    });
+
+    if (!validation.success) {
+      setErrorMessage(validation.error.issues[0]?.message ?? "Invalid registration details");
       return;
     }
 
     setLoading(true);
     try {
-      await signIn({ identifier, password });
+      await signUp({
+        name: name.trim(),
+        email: trimmedEmail || undefined,
+        mobile: trimmedMobile || undefined,
+        password
+      });
+      // Will auto-redirect to setup or tabs via RootNavigator
     } catch (err) {
       setErrorMessage(
-        err instanceof Error ? err.message : "Failed to sign in. Check credentials."
+        err instanceof Error ? err.message : "Registration failed. Please try again."
       );
     } finally {
       setLoading(false);
     }
-  }
-
-  function fillDemo(demoId: string, demoPass: string) {
-    setIdentifier(demoId);
-    setPassword(demoPass);
-    setErrorMessage(null);
   }
 
   return (
@@ -65,9 +81,9 @@ export default function LoginScreen() {
             <View style={styles.logoBadge}>
               <Text style={styles.logoText}>🏸</Text>
             </View>
-            <Text style={styles.title}>Badminton Club OS</Text>
+            <Text style={styles.title}>Create Account</Text>
             <Text style={styles.subtitle}>
-              Sign in to manage club bookings, matches, and notifications
+              Register with either your email or mobile number to get started.
             </Text>
           </View>
 
@@ -79,17 +95,43 @@ export default function LoginScreen() {
 
           <View style={styles.form}>
             <View style={styles.field}>
-              <Text style={styles.label}>Email or Mobile Number</Text>
+              <Text style={styles.label}>Full Name</Text>
               <TextInput
-                value={identifier}
-                onChangeText={setIdentifier}
-                placeholder="you@club.com or 9876543210"
+                value={name}
+                onChangeText={setName}
+                placeholder="Ravi Kumar"
                 placeholderTextColor={colors.textSubtle}
-                keyboardType="default"
+                autoCapitalize="words"
+                style={styles.input}
+              />
+            </View>
+
+            <View style={styles.field}>
+              <Text style={styles.label}>Email Address (Optional)</Text>
+              <TextInput
+                value={email}
+                onChangeText={setEmail}
+                placeholder="you@club.com"
+                placeholderTextColor={colors.textSubtle}
+                keyboardType="email-address"
                 autoCapitalize="none"
                 autoCorrect={false}
                 style={styles.input}
               />
+              <Text style={styles.hintText}>Optional if mobile number is provided</Text>
+            </View>
+
+            <View style={styles.field}>
+              <Text style={styles.label}>Mobile Number (Optional)</Text>
+              <TextInput
+                value={mobile}
+                onChangeText={setMobile}
+                placeholder="+91 98765 43210"
+                placeholderTextColor={colors.textSubtle}
+                keyboardType="phone-pad"
+                style={styles.input}
+              />
+              <Text style={styles.hintText}>Optional if email address is provided</Text>
             </View>
 
             <View style={styles.field}>
@@ -97,7 +139,7 @@ export default function LoginScreen() {
               <TextInput
                 value={password}
                 onChangeText={setPassword}
-                placeholder="••••••••"
+                placeholder="At least 8 characters"
                 placeholderTextColor={colors.textSubtle}
                 secureTextEntry
                 autoCapitalize="none"
@@ -106,50 +148,20 @@ export default function LoginScreen() {
             </View>
 
             <Button
-              title="Sign In"
-              onPress={handleLogin}
+              title="Create Account"
+              onPress={handleRegister}
               loading={loading}
               style={styles.submitBtn}
             />
 
             <TouchableOpacity
               style={{ marginTop: 14, alignItems: "center" }}
-              onPress={() => router.push("/(auth)/register")}
+              onPress={() => router.back()}
             >
               <Text style={{ color: colors.textMuted, fontSize: 13 }}>
-                Don't have an account? <Text style={{ color: colors.primary, fontWeight: "600" }}>Sign up</Text>
+                Already have an account? <Text style={{ color: colors.primary, fontWeight: "600" }}>Sign in</Text>
               </Text>
             </TouchableOpacity>
-
-            <View style={styles.demoSection}>
-              <Text style={styles.demoTitle}>Quick Demo Logins:</Text>
-              <View style={styles.demoButtons}>
-                <TouchableOpacity
-                  style={styles.demoBtn}
-                  onPress={() => fillDemo("admin@bcos.app", "Admin@123!")}
-                >
-                  <Text style={styles.demoBtnText}>Admin</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.demoBtn}
-                  onPress={() => fillDemo("player1@demo.club", "Password123!")}
-                >
-                  <Text style={styles.demoBtnText}>Player 1</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.demoBtn}
-                  onPress={() => fillDemo("9999999999", "Password123!")}
-                >
-                  <Text style={styles.demoBtnText}>Needs Setup</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            <View style={styles.serverSection}>
-              <Text style={styles.serverText}>
-                Backend: {getBaseApiUrl()}
-              </Text>
-            </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -169,7 +181,7 @@ const styles = StyleSheet.create({
   },
   header: {
     alignItems: "center",
-    marginBottom: 32
+    marginBottom: 24
   },
   logoBadge: {
     width: 68,
@@ -205,7 +217,7 @@ const styles = StyleSheet.create({
     borderColor: colors.danger,
     borderRadius: 10,
     padding: 12,
-    marginBottom: 20
+    marginBottom: 18
   },
   errorText: {
     color: colors.danger,
@@ -214,15 +226,19 @@ const styles = StyleSheet.create({
     textAlign: "center"
   },
   form: {
-    gap: 18
+    gap: 16
   },
   field: {
-    gap: 8
+    gap: 6
   },
   label: {
     fontSize: 13,
     fontWeight: "600",
     color: colors.text
+  },
+  hintText: {
+    fontSize: 11,
+    color: colors.textSubtle
   },
   input: {
     height: 48,
@@ -236,38 +252,5 @@ const styles = StyleSheet.create({
   },
   submitBtn: {
     marginTop: 8
-  },
-  demoSection: {
-    marginTop: 20,
-    alignItems: "center",
-    gap: 8
-  },
-  demoTitle: {
-    fontSize: 12,
-    color: colors.textSubtle
-  },
-  demoButtons: {
-    flexDirection: "row",
-    gap: 12
-  },
-  demoBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: colors.cardBorder
-  },
-  demoBtnText: {
-    fontSize: 12,
-    color: colors.textMuted
-  },
-  serverSection: {
-    marginTop: 12,
-    alignItems: "center"
-  },
-  serverText: {
-    fontSize: 11,
-    color: colors.textSubtle
   }
 });

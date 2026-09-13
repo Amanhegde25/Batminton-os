@@ -86,7 +86,7 @@ export default function HubScreen() {
           </View>
           <View style={styles.profileInfo}>
             <Text style={styles.profileName}>{user?.name || "Player"}</Text>
-            <Text style={styles.profileEmail}>{user?.email}</Text>
+            <Text style={styles.profileEmail}>{user?.email || user?.mobile || "Active Member"}</Text>
             <View style={styles.profileBadgeRow}>
               <Badge label={activeMembership?.role ?? "PLAYER"} tone="primary" />
               <TouchableOpacity

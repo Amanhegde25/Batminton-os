@@ -31,7 +31,7 @@ import type {
   PlayGroupDetail,
   PlayGroupPostItem
 } from "./types";
-import type { LoginInput } from "./schemas";
+import type { LoginInput, RegisterInput } from "./schemas";
 
 export interface ApiClientConfig {
   baseUrl: string;
@@ -116,13 +116,23 @@ export function createApiClient(config: ApiClientConfig) {
           method: "POST",
           json: input
         }),
+      register: (input: RegisterInput) =>
+        request<{ user: SessionUser; token?: string }>("/api/auth/register", {
+          method: "POST",
+          json: input
+        }),
       token: () => request<{ user: SessionUser }>("/api/auth/token"),
       logout: () => request<void>("/api/auth/logout", { method: "POST" })
     },
     users: {
       me: () => request<Me>("/api/users/me"),
       updateProfile: (data: Partial<SessionUser>) =>
-        request<SessionUser>("/api/users/me", { method: "PATCH", json: data })
+        request<SessionUser>("/api/users/me", { method: "PATCH", json: data }),
+      setup: (data: { email?: string; mobile?: string; aadhar?: string; skip?: boolean }) =>
+        request<{ user: SessionUser }>("/api/users/setup", {
+          method: "POST",
+          json: data
+        })
     },
 
     // 2. Clubs & Dashboard

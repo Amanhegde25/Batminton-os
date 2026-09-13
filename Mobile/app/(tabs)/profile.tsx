@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { View, Text, StyleSheet, ScrollView } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
 import { useAuth } from "../../src/context/auth";
 import { colors } from "../../src/theme/colors";
 import { Card } from "../../src/components/Card";
@@ -8,6 +9,7 @@ import { Badge } from "../../src/components/Badge";
 import { Button } from "../../src/components/Button";
 
 export default function ProfileScreen() {
+  const router = useRouter();
   const { user, signOut } = useAuth();
   const [loggingOut, setLoggingOut] = useState(false);
 
@@ -36,7 +38,7 @@ export default function ProfileScreen() {
           </View>
           <View style={styles.profileInfo}>
             <Text style={styles.name}>{user?.name || "Player"}</Text>
-            <Text style={styles.email}>{user?.email}</Text>
+            <Text style={styles.email}>{user?.email || user?.mobile || "Active Player"}</Text>
             <View style={{ marginTop: 6 }}>
               <Badge label={user?.role ?? "PLAYER"} tone="primary" />
             </View>
@@ -44,7 +46,21 @@ export default function ProfileScreen() {
         </Card>
 
         <Card style={styles.detailsCard}>
-          <Text style={styles.sectionHeading}>Session Details</Text>
+          <Text style={styles.sectionHeading}>Account & Contact Details</Text>
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Email</Text>
+            <Text style={styles.detailVal} numberOfLines={1}>{user?.email || "Not linked"}</Text>
+          </View>
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Mobile</Text>
+            <Text style={styles.detailVal}>{user?.mobile || "Not linked"}</Text>
+          </View>
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Aadhaar</Text>
+            <Text style={styles.detailVal}>
+              {user?.aadhar ? `•••• •••• ${user.aadhar.slice(-4)}` : "Not linked (Optional)"}
+            </Text>
+          </View>
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>User ID</Text>
             <Text style={styles.detailVal} numberOfLines={1}>{user?.id}</Text>
@@ -53,11 +69,13 @@ export default function ProfileScreen() {
             <Text style={styles.detailLabel}>Token Version</Text>
             <Text style={styles.detailVal}>{user?.tokenVersion}</Text>
           </View>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Mobile</Text>
-            <Text style={styles.detailVal}>{user?.mobile || "Not linked"}</Text>
-          </View>
         </Card>
+
+        <Button
+          title="Edit Profile & Preferences"
+          variant="outline"
+          onPress={() => router.push("/settings")}
+        />
 
         <Button
           title="Sign Out"

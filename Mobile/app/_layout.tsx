@@ -26,11 +26,20 @@ function RootNavigator() {
     if (isLoading) return;
 
     const inAuthGroup = segments[0] === "(auth)";
+    const onSetupScreen = (segments as string[])[1] === "setup";
 
-    if (!user && !inAuthGroup) {
-      router.replace("/(auth)/login");
-    } else if (user && inAuthGroup) {
-      router.replace("/(tabs)");
+    if (!user) {
+      if (!inAuthGroup) {
+        router.replace("/(auth)/login");
+      }
+    } else {
+      if (user.hasCompletedSetup === false) {
+        if (!onSetupScreen) {
+          router.replace("/(auth)/setup");
+        }
+      } else if (inAuthGroup) {
+        router.replace("/(tabs)");
+      }
     }
   }, [user, isLoading, segments, router]);
 

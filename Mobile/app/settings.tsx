@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -25,29 +25,66 @@ const TIMES = ["MORNING", "EVENING", "NIGHT"];
 
 export default function SettingsScreen() {
   const router = useRouter();
-  const { user, signOut } = useAuth();
+  const { user, updateUser, signOut } = useAuth();
   const { me, refreshClubContext, activeClub } = useClub();
+
+  function formatAadhar(val: string): string {
+    const digits = val.replace(/\D/g, "").slice(0, 12);
+    const parts = [];
+    for (let i = 0; i < digits.length; i += 4) {
+      parts.push(digits.slice(i, i + 4));
+    }
+    return parts.join(" ");
+  }
 
   const [name, setName] = useState(user?.name || "");
   const [email, setEmail] = useState(user?.email || "");
   const [mobile, setMobile] = useState(user?.mobile || "");
-  const [aadhar, setAadhar] = useState(user?.aadhar || "");
+  const [aadhar, setAadhar] = useState(user?.aadhar ? formatAadhar(user.aadhar) : "");
   const [hand, setHand] = useState(user?.dominantHand || "RIGHT");
   const [style, setStyle] = useState(user?.playingStyle || "ALL_ROUND");
   const [time, setTime] = useState(user?.preferredTime || "EVENING");
 
+  useEffect(() => {
+    if (user) {
+      setName(user.name || "");
+      setEmail(user.email || "");
+      setMobile(user.mobile || "");
+      setAadhar(user.aadhar ? formatAadhar(user.aadhar) : "");
+      setHand(user.dominantHand || "RIGHT");
+      setStyle(user.playingStyle || "ALL_ROUND");
+      setTime(user.preferredTime || "EVENING");
+    }
+  }, [user]);
+
   const saveMutation = useMutation({
-    mutationFn: () =>
-      api.users.updateProfile({
-        name,
-        email: email.trim() || undefined,
-        mobile: mobile.trim() || undefined,
-        aadhar: aadhar.replace(/\D/g, "") || undefined,
+    mutationFn: async () => {
+      const trimmedEmail = email.trim();
+      const trimmedMobile = mobile.trim();
+      const cleanAadhar = aadhar.replace(/\D/g, "");
+
+      if (!trimmedEmail && !trimmedMobile) {
+        throw new Error("You must keep at least an email address or mobile number linked.");
+      }
+
+      if (cleanAadhar && cleanAadhar.length !== 12) {
+        throw new Error("Aadhaar number must be exactly 12 digits (or leave empty).");
+      }
+
+      return api.users.updateProfile({
+        name: name.trim(),
+        email: trimmedEmail ? trimmedEmail : null,
+        mobile: trimmedMobile ? trimmedMobile : null,
+        aadhar: cleanAadhar ? cleanAadhar : null,
         dominantHand: hand,
         playingStyle: style,
         preferredTime: time
-      }),
-    onSuccess: async () => {
+      });
+    },
+    onSuccess: async (updatedUser) => {
+      if (updatedUser) {
+        await updateUser(updatedUser);
+      }
       await refreshClubContext();
       Alert.alert("Success", "Profile preferences saved successfully!");
     },
@@ -76,6 +113,25 @@ export default function SettingsScreen() {
         <Card style={styles.card}>
           <Text style={styles.sectionHeading}>Player Profile</Text>
 
+          {/* Contact Status Badges */}
+          <View style={styles.badgeRow}>
+            <View style={[styles.statusBadge, user?.email ? styles.badgeSuccess : styles.badgeMuted]}>
+              <Text style={[styles.badgeText, user?.email ? styles.badgeTextSuccess : styles.badgeTextMuted]}>
+                {user?.email ? "Email linked" : "No email"}
+              </Text>
+            </View>
+            <View style={[styles.statusBadge, user?.mobile ? styles.badgeSuccess : styles.badgeMuted]}>
+              <Text style={[styles.badgeText, user?.mobile ? styles.badgeTextSuccess : styles.badgeTextMuted]}>
+                {user?.mobile ? "Mobile linked" : "No mobile"}
+              </Text>
+            </View>
+            <View style={[styles.statusBadge, user?.aadhar ? styles.badgeSuccess : styles.badgeMuted]}>
+              <Text style={[styles.badgeText, user?.aadhar ? styles.badgeTextSuccess : styles.badgeTextMuted]}>
+                {user?.aadhar ? "Aadhaar verified" : "Aadhaar optional"}
+              </Text>
+            </View>
+          </View>
+
           <View style={styles.field}>
             <Text style={styles.label}>Full Name</Text>
             <TextInput
@@ -98,6 +154,9 @@ export default function SettingsScreen() {
               placeholder="you@example.com"
               placeholderTextColor={colors.textSubtle}
             />
+            <Text style={styles.hintText}>
+              {user?.email ? "Linked. You can remove your phone number if you keep this email." : "Optional if mobile is provided."}
+            </Text>
           </View>
 
           <View style={styles.field}>
@@ -110,19 +169,25 @@ export default function SettingsScreen() {
               placeholder="+91 98765 43210"
               placeholderTextColor={colors.textSubtle}
             />
+            <Text style={styles.hintText}>
+              {user?.mobile ? "Linked. You can remove your email if you keep this phone number." : "Optional if email is provided."}
+            </Text>
           </View>
 
           <View style={styles.field}>
             <Text style={styles.label}>Aadhaar Number (Optional)</Text>
             <TextInput
               value={aadhar}
-              onChangeText={setAadhar}
+              onChangeText={(val) => setAadhar(formatAadhar(val))}
               keyboardType="numeric"
-              maxLength={12}
+              maxLength={14}
               style={styles.input}
-              placeholder="12-digit Aadhaar number"
+              placeholder="XXXX XXXX XXXX"
               placeholderTextColor={colors.textSubtle}
             />
+            <Text style={styles.hintText}>
+              Not required. Completely optional Indian UIDAI ID.
+            </Text>
           </View>
 
           {/* Dominant Hand */}
@@ -268,6 +333,36 @@ const styles = StyleSheet.create({
     color: colors.text,
     marginBottom: 4
   },
+  badgeRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 6
+  },
+  statusBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 16,
+    borderWidth: 1
+  },
+  badgeSuccess: {
+    backgroundColor: "rgba(34, 197, 94, 0.12)",
+    borderColor: "rgba(34, 197, 94, 0.3)"
+  },
+  badgeMuted: {
+    backgroundColor: "rgba(148, 163, 184, 0.1)",
+    borderColor: "rgba(148, 163, 184, 0.2)"
+  },
+  badgeText: {
+    fontSize: 11,
+    fontWeight: "600"
+  },
+  badgeTextSuccess: {
+    color: "#22c55e"
+  },
+  badgeTextMuted: {
+    color: colors.textMuted
+  },
   field: {
     gap: 6
   },
@@ -275,6 +370,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "600",
     color: colors.textMuted
+  },
+  hintText: {
+    fontSize: 11,
+    color: colors.textSubtle,
+    marginTop: 2
   },
   input: {
     height: 46,
