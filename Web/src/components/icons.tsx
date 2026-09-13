@@ -57,9 +57,10 @@ export {
   QrCode,
   Sliders,
   DollarSign,
-  AlertCircle,
   MessageSquare,
-  ExternalLink
+  ExternalLink,
+  RotateCcw,
+  ArrowLeftRight
 } from "lucide-react";
 
 export function ShuttlecockIcon({

@@ -194,6 +194,10 @@ export function createApiClient(config: ApiClientConfig) {
           `/api/clubs/${clubId}/matches?${qs.toString()}`
         );
       },
+      get: (clubId: string, matchId: string) =>
+        request<any>(`/api/clubs/${clubId}/matches/${matchId}`),
+      act: (clubId: string, matchId: string, data: Record<string, unknown>) =>
+        request<any>(`/api/clubs/${clubId}/matches/${matchId}`, { method: "POST", json: data }),
       create: (clubId: string, data: unknown) =>
         request<MatchRow>(`/api/clubs/${clubId}/matches`, { method: "POST", json: data })
     },
