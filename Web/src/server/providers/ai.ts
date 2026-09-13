@@ -1,4 +1,4 @@
-import { prisma } from "@/server/db";
+import { users, matches, matchPlayers, matchTeams, matchScores, ratingHistories, attendanceRecords } from "@/server/db";
 import { env } from "@/lib/env";
 
 export interface CoachingPayload {
@@ -98,8 +98,8 @@ export class RuleBasedProvider implements AIProvider {
       drills.push("Shadow defensive footwork: 10 min/session");
     } else if (ctx.avgPointDiff >= 3) {
       insights.push({
-        title: "Dominant scoring",
-        detail: `Average margin of +${ctx.avgPointDiff} points per match indicates control of rally tempo.`
+        title: "Dominant scoring margin",
+        detail: `Averaging +${ctx.avgPointDiff} points over opponents — attacking tempo is working well.`
       });
     }
 
@@ -116,67 +116,74 @@ export class RuleBasedProvider implements AIProvider {
       });
     }
 
-    if (ctx.attendancePct < 50) {
+    if (ctx.attendancePct < 50 && ctx.played >= 3) {
       insights.push({
-        title: "Attendance is limiting progress",
-        detail: `${ctx.attendancePct}% attendance in the last 30 days. Consistent court time is the single biggest lever on rating right now.`
+        title: "Session consistency",
+        detail: `Club attendance is at ${ctx.attendancePct}% over the past 30 days. Regular sparring directly correlates with rating retention.`
       });
-      focus.push("Consistency: attend at least 2 sessions/week");
+      focus.push("Weekly attendance consistency");
     }
 
-    if (focus.length === 0) focus.push("Maintain current form", "Add variation to attacking clears");
-    if (drills.length === 0) drills.push("Multi-shuttle net kills: 3 sets of 20", "Backhand corner recovery drill: 10 min");
-
-    const headline =
-      trendDelta >= 3
-        ? `${ctx.name}'s form is improving fast`
-        : ctx.played < 3
-          ? "Early days — keep playing"
-          : trendDelta <= -3
-            ? "Slump detected — targeted fixes available"
-            : "Steady form with clear growth areas";
+    if (focus.length === 0) focus.push("Maintain current tactical balance", "Spar against higher-rated pairs");
+    if (drills.length === 0) drills.push("Half-court singles for placement: 15 min", "Serve return depth drills: 10 min");
 
     return {
-      headline,
-      summary: `Based on ${ctx.played} completed match${ctx.played === 1 ? "" : "es"}, a ${ctx.winRate}% win rate and ${
-        ctx.attendancePct
-      }% attendance over the last 30 days.`,
+      headline: headlineFor(ctx),
+      summary: summaryFor(ctx),
       insights,
       focusAreas: focus.slice(0, 3),
-      drills,
+      drills: drills.slice(0, 3),
       disclaimer: DISCLAIMER
     };
   }
 }
 
-const DISCLAIMER =
-  "AI-generated suggestion based on your match history. Treat as guidance from patterns, not a guaranteed diagnosis.";
+const DISCLAIMER = "AI coaching insights are algorithmically generated suggestions based on match history, not certified coaching advice.";
+
+function headlineFor(ctx: CoachingContext): string {
+  if (ctx.winRate >= 65) return "Strong current form — maintain offensive pressure";
+  if (ctx.winRate <= 35) return "Refocus on shot fundamentals and rally control";
+  return "Competitive form with clear margin-of-victory upside";
+}
+
+function summaryFor(ctx: CoachingContext): string {
+  const parts: string[] = [];
+  parts.push(`${ctx.name} has played ${ctx.played} doubles matches recorded, with an overall win rate of ${ctx.winRate}%.`);
+  if (ctx.bestPartner) parts.push(`Most effective partnership is with ${ctx.bestPartner.name} (${ctx.bestPartner.winRate}% win rate).`);
+  if (ctx.hardestOpponent) parts.push(`Toughest matchup has been against ${ctx.hardestOpponent.name} (${ctx.hardestOpponent.losses} losses).`);
+  return parts.join(" ");
+}
 
 export class OpenAIProvider implements AIProvider {
   name = "openai";
+
   constructor(private model: string, private apiKey: string) {}
 
   async coachingInsights(ctx: CoachingContext): Promise<CoachingPayload> {
-    const prompt = buildPrompt(ctx);
     try {
       const res = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${this.apiKey}` },
         body: JSON.stringify({
           model: this.model,
+          response_format: { type: "json_object" },
           messages: [
-            { role: "system", content: "You are a badminton coach. Reply ONLY with JSON matching: {headline,summary,insights:[{title,detail}],focusAreas:[string],drills:[string],disclaimer}" },
-            { role: "user", content: prompt }
-          ],
-          temperature: 0.6
+            {
+              role: "system",
+              content:
+                "You are an expert badminton coach. Return a JSON object matching { headline, summary, insights: [{title, detail}], focusAreas: string[], drills: string[], disclaimer }."
+            },
+            { role: "user", content: buildPrompt(ctx) }
+          ]
         })
       });
-      if (!res.ok) throw new Error(`OpenAI responded ${res.status}`);
-      const json: any = await res.json();
-      const parsed = JSON.parse(json.choices[0].message.content);
-      return { ...parsed, disclaimer: parsed.disclaimer || DISCLAIMER };
-    } catch (e) {
-      console.error("[ai] openai failed, falling back to rulebased", e);
+      if (!res.ok) throw new Error(`OpenAI error: ${res.statusText}`);
+      const json = await res.json();
+      const content = json.choices?.[0]?.message?.content;
+      const parsed = JSON.parse(content) as CoachingPayload;
+      parsed.disclaimer = DISCLAIMER;
+      return parsed;
+    } catch {
       const fallback = new RuleBasedProvider();
       return fallback.coachingInsights(ctx);
     }
@@ -195,17 +202,50 @@ export function getAIProvider(): AIProvider {
 }
 
 export async function buildCoachingContext(clubId: string, userId: string): Promise<CoachingContext> {
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { name: true } });
+  const user = await users().findOne({ id: userId }, { projection: { name: 1 } });
   const now = new Date();
   const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
 
-  const matches = await prisma.match.findMany({
-    where: { clubId, status: "COMPLETED", players: { some: { userId } }, type: "DOUBLES" },
-    include: { teams: { include: { players: true } }, scores: true },
-    orderBy: { endedAt: "desc" },
-    take: 100
-  });
+  const userMatches = await matchPlayers().find({ userId }).toArray();
+  const userMatchIds = Array.from(new Set(userMatches.map((p) => p.matchId as string)));
+
+  const matchDocs = await matches().find({
+    id: { $in: userMatchIds },
+    clubId,
+    status: "COMPLETED",
+    type: "DOUBLES"
+  }).sort({ endedAt: -1 }).limit(100).toArray();
+
+  const matchIds = matchDocs.map((m) => m.id as string);
+
+  const [allTeams, allPlayers, allScores] = await Promise.all([
+    matchTeams().find({ matchId: { $in: matchIds } }).toArray(),
+    matchPlayers().find({ matchId: { $in: matchIds } }).toArray(),
+    matchScores().find({ matchId: { $in: matchIds } }).toArray()
+  ]);
+
+  const teamsByMatch = new Map<string, any[]>();
+  for (const t of allTeams) {
+    const list = teamsByMatch.get(t.matchId as string) || [];
+    list.push(t);
+    teamsByMatch.set(t.matchId as string, list);
+  }
+
+  const playersByMatchTeam = new Map<string, any[]>();
+  for (const p of allPlayers) {
+    const key = `${p.matchId}:${p.teamIndex}`;
+    const list = playersByMatchTeam.get(key) || [];
+    list.push(p);
+    playersByMatchTeam.set(key, list);
+  }
+
+  const scoresByMatch = new Map<string, any[]>();
+  for (const s of allScores) {
+    const list = scoresByMatch.get(s.matchId as string) || [];
+    list.push(s);
+    scoresByMatch.set(s.matchId as string, list);
+  }
 
   let winsAll = 0;
   let playedAll = 0;
@@ -221,11 +261,17 @@ export async function buildCoachingContext(clubId: string, userId: string): Prom
   const partnerAgg = new Map<string, { played: number; wins: number }>();
   const oppAgg = new Map<string, { losses: number; played: number }>();
 
-  for (const m of matches) {
-    const myTeam = m.teams.find((t) => t.players.some((p) => p.userId === userId));
-    const otherTeam = m.teams.find((t) => t.teamIndex !== myTeam?.teamIndex);
+  for (const m of matchDocs) {
+    const mTeams = (teamsByMatch.get(m.id as string) || []).map((t) => ({
+      ...t,
+      players: playersByMatchTeam.get(`${m.id}:${t.teamIndex}`) || []
+    }));
+    const mScores = scoresByMatch.get(m.id as string) || [];
+
+    const myTeam = mTeams.find((t) => t.players.some((p: any) => p.userId === userId));
+    const otherTeam = mTeams.find((t) => t.teamIndex !== myTeam?.teamIndex);
     if (!myTeam || !otherTeam) continue;
-    const ended = m.endedAt ?? m.createdAt;
+    const ended = (m.endedAt ?? m.createdAt) as Date;
     const won = m.winnerTeamIndex === myTeam.teamIndex;
     playedAll++;
     if (won) winsAll++;
@@ -237,9 +283,9 @@ export async function buildCoachingContext(clubId: string, userId: string): Prom
       playedLast++;
       if (won) winsLast++;
     }
-    const scores = [...m.scores].sort((a, b) => a.setNumber - b.setNumber);
-    const myScores = scores.map((s) => (myTeam.teamIndex === 0 ? s.scoreA : s.scoreB));
-    const oppScores = scores.map((s) => (myTeam.teamIndex === 0 ? s.scoreB : s.scoreA));
+    const scores = [...mScores].sort((a, b) => (a.setNumber as number) - (b.setNumber as number));
+    const myScores = scores.map((s) => (myTeam.teamIndex === 0 ? (s.scoreA as number) : (s.scoreB as number)));
+    const oppScores = scores.map((s) => (myTeam.teamIndex === 0 ? (s.scoreB as number) : (s.scoreA as number)));
     pointsFor += myScores.reduce((a, b) => a + b, 0);
     pointsAgainst += oppScores.reduce((a, b) => a + b, 0);
     myScores.forEach((ms, i) => {
@@ -252,26 +298,25 @@ export async function buildCoachingContext(clubId: string, userId: string): Prom
     }
     for (const p of myTeam.players) {
       if (p.userId === userId) continue;
-      const agg = partnerAgg.get(p.userId) ?? { played: 0, wins: 0 };
+      const agg = partnerAgg.get(p.userId as string) ?? { played: 0, wins: 0 };
       agg.played++;
       if (won) agg.wins++;
-      partnerAgg.set(p.userId, agg);
+      partnerAgg.set(p.userId as string, agg);
     }
     for (const p of otherTeam.players) {
-      const agg = oppAgg.get(p.userId) ?? { losses: 0, played: 0 };
+      const agg = oppAgg.get(p.userId as string) ?? { losses: 0, played: 0 };
       agg.played++;
       if (!won) agg.losses++;
-      oppAgg.set(p.userId, agg);
+      oppAgg.set(p.userId as string, agg);
     }
   }
 
-  const monthHistory = await prisma.ratingHistory.findMany({
-    where: { clubId, userId, createdAt: { gte: thisMonthStart } }
-  });
-  const attendanceRecords = await prisma.attendanceRecord.findMany({
-    where: { clubId, userId, createdAt: { gte: new Date(now.getTime() - 30 * 86400000) } }
-  });
-  const attended = attendanceRecords.filter((r) => ["PRESENT", "LATE"].includes(r.status)).length;
+  const [monthHistory, attRecords] = await Promise.all([
+    ratingHistories().find({ clubId, userId, createdAt: { $gte: thisMonthStart } }).toArray(),
+    attendanceRecords().find({ clubId, userId, createdAt: { $gte: new Date(now.getTime() - 30 * 86400000) } }).toArray()
+  ]);
+
+  const attended = attRecords.filter((r) => ["PRESENT", "LATE"].includes(r.status as string)).length;
 
   const bestPartnerEntry = [...partnerAgg.entries()]
     .filter(([, v]) => v.played >= 2)
@@ -280,20 +325,20 @@ export async function buildCoachingContext(clubId: string, userId: string): Prom
 
   const idsToName = async (ids: string[]) => {
     if (ids.length === 0) return null;
-    const u = await prisma.user.findUnique({ where: { id: ids[0] }, select: { name: true } });
-    return u?.name ?? null;
+    const u = await users().findOne({ id: ids[0] }, { projection: { name: 1 } });
+    return (u?.name as string) ?? null;
   };
 
   const bestPartnerName = bestPartnerEntry ? await idsToName([bestPartnerEntry[0]]) : null;
   const hardestOppName = hardestOppEntry ? await idsToName([hardestOppEntry[0]]) : null;
 
   return {
-    name: user?.name ?? "Player",
+    name: (user?.name as string) ?? "Player",
     played: playedAll,
     winRate: playedAll ? Math.round((winsAll / playedAll) * 100) : 0,
     winRateThisMonth: playedThis ? Math.round((winsThis / playedThis) * 100) : playedAll ? 0 : 0,
     winRateLastMonth: playedLast ? Math.round((winsLast / playedLast) * 100) : playedThis ? 0 : playedThis || playedLast ? 0 : 50,
-    ratingDeltaMonth: Math.round(monthHistory.reduce((s, h) => s + h.delta, 0)),
+    ratingDeltaMonth: Math.round(monthHistory.reduce((s, h) => s + (Number(h.delta) || 0), 0)),
     avgPointDiff: playedAll ? Math.round(((pointsFor - pointsAgainst) / playedAll) * 10) / 10 : 0,
     decidingSetWinRate: decidersPlayed > 0 ? (decidersWon / decidersPlayed) * 100 : null,
     closeLosses: closeLossSets,

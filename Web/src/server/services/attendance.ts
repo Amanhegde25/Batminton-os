@@ -1,4 +1,4 @@
-import { prisma } from "@/server/db";
+import { clubs, clubMembers, attendanceRecords } from "@/server/db";
 import { ApiError } from "@/lib/api";
 import { AUDIT_ACTIONS, parseClubSettings } from "@/lib/constants";
 import { attendanceStatusForCheckIn } from "@/lib/engines/attendance-rules";
@@ -6,6 +6,7 @@ import { dayKey, startOfDay, endOfDay } from "@/lib/date";
 import { signToken, verifyToken } from "@/server/auth/tokens";
 import { issueFromEvent } from "./penalties";
 import { audit } from "./audit";
+import { cuid } from "@/lib/id";
 
 export async function checkIn(
   clubId: string,
@@ -13,19 +14,17 @@ export async function checkIn(
   input: { method: "MANUAL" | "QR" | "GPS" | "APP_SELF"; token?: string; lat?: number; lng?: number },
   actor: { id: string }
 ) {
-  const club = await prisma.club.findFirst({ where: { id: clubId, deletedAt: null } });
+  const club = await clubs().findOne({ id: clubId, deletedAt: null });
   if (!club) throw ApiError.notFound("Club not found");
-  const settings = parseClubSettings(club.settings);
+  const settings = parseClubSettings(club.settings as string);
 
-  const membership = await prisma.clubMember.findUnique({
-    where: { clubId_userId: { clubId, userId: targetUserId } }
-  });
+  const membership = await clubMembers().findOne({ clubId, userId: targetUserId });
   if (!membership || membership.status !== "ACTIVE") {
     throw ApiError.forbidden("Only active members can check in");
   }
 
-  const isStaffActor = await prisma.clubMember.findFirst({
-    where: { clubId, userId: actor.id, status: "ACTIVE", role: { in: ["OWNER", "ADMIN"] } }
+  const isStaffActor = await clubMembers().findOne({
+    clubId, userId: actor.id, status: "ACTIVE", role: { $in: ["OWNER", "ADMIN"] }
   });
   if (targetUserId !== actor.id && !isStaffActor) {
     throw ApiError.forbidden("You can only mark your own attendance");
@@ -42,9 +41,7 @@ export async function checkIn(
     throw ApiError.forbidden("Self check-in is disabled. Ask an admin to mark you present.");
   }
   const day = dayKey();
-  const existing = await prisma.attendanceRecord.findUnique({
-    where: { clubId_userId_day: { clubId, userId: targetUserId, day } }
-  });
+  const existing = await attendanceRecords().findOne({ clubId, userId: targetUserId, day });
   if (existing && existing.status !== "GUEST") {
     throw ApiError.conflict(`Attendance already recorded today (${existing.status})`);
   }
@@ -55,7 +52,7 @@ export async function checkIn(
     if (club.lat == null || club.lng == null) {
       throw ApiError.conflict("Club has no coordinates configured for GPS verification");
     }
-    const dist = haversineMeters(input.lat, input.lng, club.lat, club.lng);
+    const dist = haversineMeters(input.lat, input.lng, club.lat as number, club.lng as number);
     if (dist > settings.attendance.gpsRadiusMeters) {
       throw ApiError.forbidden(`You appear to be ${Math.round(dist)}m away from the club`, "GPS_TOO_FAR");
     }
@@ -66,22 +63,30 @@ export async function checkIn(
     settings.attendance.startMinutes,
     settings.attendance.graceMinutes
   );
-  const record = existing
-    ? await prisma.attendanceRecord.update({
-        where: { id: existing.id },
-        data: { status, method: input.method, lat: input.lat, lng: input.lng, updatedAt: new Date() }
-      })
-    : await prisma.attendanceRecord.create({
-        data: {
-          clubId,
-          userId: targetUserId,
-          day,
-          status,
-          method: input.method,
-          lat: input.lat,
-          lng: input.lng
-        }
-      });
+  let record;
+  if (existing) {
+    record = await attendanceRecords().findOneAndUpdate(
+      { id: existing.id },
+      { $set: { status, method: input.method, lat: input.lat ?? null, lng: input.lng ?? null, updatedAt: new Date() } },
+      { returnDocument: "after" }
+    );
+  } else {
+    record = {
+      id: cuid(),
+      clubId,
+      userId: targetUserId,
+      day,
+      status,
+      method: input.method,
+      lat: input.lat ?? null,
+      lng: input.lng ?? null,
+      note: null,
+      markedById: null,
+      createdAt: now,
+      updatedAt: now
+    };
+    await attendanceRecords().insertOne(record);
+  }
   return record;
 }
 
@@ -104,24 +109,42 @@ export async function markManual(
     throw ApiError.badRequest("Invalid attendance status");
   }
   const day = input.day ?? dayKey();
-  const membership = await prisma.clubMember.findUnique({ where: { clubId_userId: { clubId, userId: input.userId } } });
+  const membership = await clubMembers().findOne({ clubId, userId: input.userId });
   if (!membership || (membership.status !== "ACTIVE" && input.status !== "GUEST")) {
     throw ApiError.badRequest("User is not an active member of this club");
   }
-  const existing = await prisma.attendanceRecord.findUnique({
-    where: { clubId_userId_day: { clubId, userId: input.userId, day } }
-  });
-  const record = await prisma.attendanceRecord.upsert({
-    where: { clubId_userId_day: { clubId, userId: input.userId, day } },
-    create: { clubId, userId: input.userId, day, status: input.status, method: "MANUAL", note: input.note, markedById: actor.id },
-    update: { status: input.status, note: input.note ?? null, markedById: actor.id, method: existing?.method ?? "MANUAL" }
-  });
+  const existing = await attendanceRecords().findOne({ clubId, userId: input.userId, day });
+  const now = new Date();
+  let record;
+  if (existing) {
+    record = await attendanceRecords().findOneAndUpdate(
+      { id: existing.id },
+      { $set: { status: input.status, note: input.note ?? null, markedById: actor.id, method: existing.method ?? "MANUAL", updatedAt: now } },
+      { returnDocument: "after" }
+    );
+  } else {
+    record = {
+      id: cuid(),
+      clubId,
+      userId: input.userId,
+      day,
+      status: input.status,
+      method: "MANUAL",
+      note: input.note ?? null,
+      markedById: actor.id,
+      lat: null,
+      lng: null,
+      createdAt: now,
+      updatedAt: now
+    };
+    await attendanceRecords().insertOne(record);
+  }
   await audit({
     clubId,
     actorUserId: actor.id,
     action: AUDIT_ACTIONS.ATTENDANCE_MARKED,
     entityType: "AttendanceRecord",
-    entityId: record.id,
+    entityId: (record?.id ?? existing?.id) as string,
     previousValue: existing ? { status: existing.status } : null,
     newValue: { status: input.status, day, userId: input.userId }
   });
@@ -130,13 +153,24 @@ export async function markManual(
 
 export async function rosterForDay(clubId: string, dayInput?: string) {
   const day = dayKey(dayInput ? new Date(`${dayInput}T00:00:00`) : undefined);
-  const members = await prisma.clubMember.findMany({
-    where: { clubId, status: "ACTIVE" },
-    include: { user: { select: { id: true, name: true, photoUrl: true, skillLevel: true } } },
-    orderBy: { joinedAt: "asc" }
-  });
-  const records = await prisma.attendanceRecord.findMany({ where: { clubId, day } });
-  const byUser = new Map(records.map((r) => [r.userId, r]));
+  const members = await clubMembers().aggregate([
+    { $match: { clubId, status: "ACTIVE" } },
+    { $sort: { joinedAt: 1 } },
+    {
+      $lookup: {
+        from: "users",
+        let: { uid: "$userId" },
+        pipeline: [
+          { $match: { $expr: { $eq: ["$id", "$$uid"] } } },
+          { $project: { id: 1, name: 1, photoUrl: 1, skillLevel: 1, _id: 0 } }
+        ],
+        as: "user"
+      }
+    },
+    { $unwind: "$user" }
+  ]).toArray();
+  const records = await attendanceRecords().find({ clubId, day }).toArray();
+  const byUser = new Map(records.map((r) => [r.userId as string, r]));
   return {
     day,
     summary: {
@@ -149,17 +183,17 @@ export async function rosterForDay(clubId: string, dayInput?: string) {
     },
     roster: members.map((m) => ({
       member: m,
-      record: byUser.get(m.userId) ?? null
+      record: byUser.get(m.userId as string) ?? null
     })),
     rows: members.map((m) => {
-      const rec = byUser.get(m.userId);
+      const rec = byUser.get(m.userId as string);
       return {
         userId: m.userId,
-        name: m.user.name,
-        photoUrl: m.user.photoUrl,
+        name: (m.user as any).name,
+        photoUrl: (m.user as any).photoUrl,
         status: rec?.status ?? null,
         method: rec?.method ?? null,
-        checkInTime: rec?.createdAt ? rec.createdAt.toISOString() : null
+        checkInTime: rec?.createdAt ? (rec.createdAt as Date).toISOString() : null
       };
     }),
     guests: records.filter((r) => r.status === "GUEST")
@@ -177,26 +211,34 @@ export async function monthMatrix(clubId: string, month: string) {
     dayStrings.push(`${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`);
   }
 
-  const [members, records] = await Promise.all([
-    prisma.clubMember.findMany({
-      where: { clubId, status: "ACTIVE" },
-      include: { user: { select: { id: true, name: true } } },
-      orderBy: { joinedAt: "asc" }
-    }),
-    prisma.attendanceRecord.findMany({
-      where: { clubId, createdAt: { gte: from, lt: to } },
-      orderBy: { day: "asc" }
-    })
+  const [membersResult, records] = await Promise.all([
+    clubMembers().aggregate([
+      { $match: { clubId, status: "ACTIVE" } },
+      { $sort: { joinedAt: 1 } },
+      {
+        $lookup: {
+          from: "users",
+          let: { uid: "$userId" },
+          pipeline: [
+            { $match: { $expr: { $eq: ["$id", "$$uid"] } } },
+            { $project: { id: 1, name: 1, _id: 0 } }
+          ],
+          as: "user"
+        }
+      },
+      { $unwind: "$user" }
+    ]).toArray(),
+    attendanceRecords().find({ clubId, createdAt: { $gte: from, $lt: to } }).sort({ day: 1 }).toArray()
   ]);
 
   const recordMap = new Map<string, string>();
   for (const r of records) {
-    recordMap.set(`${r.userId}_${r.day}`, r.status);
+    recordMap.set(`${r.userId}_${r.day}`, r.status as string);
   }
 
-  const rows = members.map((mem) => ({
+  const rows = membersResult.map((mem) => ({
     userId: mem.userId,
-    name: mem.user.name,
+    name: (mem.user as any).name,
     cells: dayStrings.map((d) => recordMap.get(`${mem.userId}_${d}`) ?? null)
   }));
 
@@ -204,45 +246,48 @@ export async function monthMatrix(clubId: string, month: string) {
     month,
     days: dayStrings,
     daysCount: daysInMonth,
-    activeMembers: members.length,
+    activeMembers: membersResult.length,
     records,
     rows
   };
 }
 
 export async function userHistory(clubId: string, userId: string, take = 60) {
-  return prisma.attendanceRecord.findMany({
-    where: { clubId, userId },
-    orderBy: { day: "desc" },
-    take
-  });
+  return attendanceRecords().find({ clubId, userId }).sort({ day: -1 }).limit(take).toArray();
 }
 
 export async function runDailySweep(clubId: string, actor: { id: string }, dayInput?: string) {
   const day = dayKey(dayInput ? new Date(`${dayInput}T00:00:00`) : new Date(Date.now() - 86400000));
-  const club = await prisma.club.findFirst({ where: { id: clubId, deletedAt: null } });
+  const club = await clubs().findOne({ id: clubId, deletedAt: null });
   if (!club) throw ApiError.notFound("Club not found");
-  const settings = parseClubSettings(club.settings);
-  const members = await prisma.clubMember.findMany({ where: { clubId, status: "ACTIVE" } });
-  const records = await prisma.attendanceRecord.findMany({ where: { clubId, day } });
-  const haveRecord = new Set(records.map((r) => r.userId));
-  const missing = members.filter((m) => !haveRecord.has(m.userId));
+  const settings = parseClubSettings(club.settings as string);
+  const members = await clubMembers().find({ clubId, status: "ACTIVE" }).toArray();
+  const records = await attendanceRecords().find({ clubId, day }).toArray();
+  const haveRecord = new Set(records.map((r) => r.userId as string));
+  const missing = members.filter((m) => !haveRecord.has(m.userId as string));
 
   let penalized = 0;
   for (const m of missing) {
-    await prisma.attendanceRecord.create({
-      data: { clubId, userId: m.userId, day, status: "ABSENT", method: "AUTO", markedById: actor.id }
+    await attendanceRecords().insertOne({
+      id: cuid(),
+      clubId,
+      userId: m.userId as string,
+      day,
+      status: "ABSENT",
+      method: "AUTO",
+      markedById: actor.id,
+      lat: null,
+      lng: null,
+      note: null,
+      createdAt: new Date(),
+      updatedAt: new Date()
     });
     if (settings.attendance.autoAbsentPenalty) {
-      const penalty = await prisma.$transaction(
-        (tx) =>
-          issueFromEvent(tx, clubId, m.userId, "ABSENCE", {
-            relatedType: "ATTENDANCE_DAY",
-            relatedId: `${day}:${m.userId}`,
-            createdById: actor.id
-          }),
-        { timeout: 20000, maxWait: 10000 }
-      );
+      const penalty = await issueFromEvent(null, clubId, m.userId as string, "ABSENCE", {
+        relatedType: "ATTENDANCE_DAY",
+        relatedId: `${day}:${m.userId}`,
+        createdById: actor.id
+      });
       if (penalty) penalized++;
     }
   }
@@ -260,10 +305,10 @@ export async function runDailySweep(clubId: string, actor: { id: string }, dayIn
 export async function rangeStats(clubId: string, fromDate?: string, toDate?: string) {
   const from = fromDate ? startOfDay(fromDate) : startOfDay(new Date());
   const to = toDate ? endOfDay(toDate) : endOfDay(new Date());
-  const records = await prisma.attendanceRecord.findMany({
-    where: { clubId, day: { gte: isoDay(from), lte: isoDay(to) } }
-  });
-  return records;
+  return attendanceRecords().find({
+    clubId,
+    day: { $gte: isoDay(from), $lte: isoDay(to) }
+  }).toArray();
 }
 
 function isoDay(d: Date): string {

@@ -1,17 +1,29 @@
-import { PrismaClient } from "@prisma/client";
-import { registerUser } from "../src/server/services/users";
-import { createClub } from "../src/server/services/clubs";
-import { addMember } from "../src/server/services/members";
-import { createCourt } from "../src/server/services/courts";
-import { ensureWallet, postTransaction, getMyWallet } from "../src/server/services/wallets";
-import { createMatch, completeMatch } from "../src/server/services/matches";
-import { createTournament, startTournament, submitScore } from "../src/server/services/tournaments";
-import { runDailySweep } from "../src/server/services/attendance";
-import { issueManual } from "../src/server/services/penalties";
-import { createGroup, createGroupSession, rsvpSession, joinGroup } from "../src/server/services/groups";
-import { randomValidSet, scoreToString, type SetScore } from "../src/lib/engines/scoring";
-
-const prisma = new PrismaClient();
+import {
+  db,
+  mongoClient,
+  users,
+  clubs,
+  clubMembers,
+  courts,
+  courtBookings,
+  attendanceRecords,
+  videoAnalyses,
+  tournamentParticipants,
+  tournamentMatches
+} from "../server/db";
+import { ensureIndexes } from "../server/indexes";
+import { registerUser } from "../server/services/users";
+import { createClub } from "../server/services/clubs";
+import { addMember } from "../server/services/members";
+import { createCourt } from "../server/services/courts";
+import { ensureWallet, postTransaction, getMyWallet } from "../server/services/wallets";
+import { createMatch, completeMatch } from "../server/services/matches";
+import { createTournament, startTournament, submitScore } from "../server/services/tournaments";
+import { runDailySweep } from "../server/services/attendance";
+import { issueManual } from "../server/services/penalties";
+import { createGroup, createGroupSession, rsvpSession, joinGroup } from "../server/services/groups";
+import { randomValidSet, scoreToString, type SetScore } from "../lib/engines/scoring";
+import { cuid } from "../lib/id";
 
 function mulberry32(seed: number) {
   let a = seed >>> 0;
@@ -40,16 +52,20 @@ const LAST_NAMES = ["Sharma", "Iyer", "Patel", "Reddy", "Nair", "Gupta", "Rao", 
 
 async function main() {
   console.log("🌱 Resetting database…");
-  const tables = [
-    "walletTransaction", "wallet", "penaltyRule", "penalty", "ratingHistory", "playerRating",
-    "matchScore", "matchPlayer", "matchTeam", "courtBooking", "match",
-    "tournamentMatch", "tournamentParticipant", "tournament",
-    "attendanceRecord", "aIInsight", "videoAnalysis", "notification",
-    "auditLog", "otpCode", "passwordResetToken", "clubMember", "court", "club", "user"
-  ] as const;
-  for (const t of tables) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (prisma as any)[t].deleteMany({});
+  await db.dropDatabase();
+
+  console.log("⚡ Ensuring indexes…");
+  await ensureIndexes();
+  const collections = [
+    "walletTransactions", "wallets", "penaltyRules", "penalties", "ratingHistories", "playerRatings",
+    "matchScores", "matchPlayers", "matchTeams", "courtBookings", "matches",
+    "tournamentMatches", "tournamentParticipants", "tournaments",
+    "attendanceRecords", "aiInsights", "videoAnalyses", "notifications",
+    "auditLogs", "otpCodes", "passwordResetTokens", "clubMembers", "courts", "clubs", "users",
+    "playGroups", "playGroupMembers", "playGroupSessions", "playGroupSessionRsvps", "playGroupPosts"
+  ];
+  for (const name of collections) {
+    await db.collection(name).deleteMany({});
   }
 
   console.log("👑 Creating super admin…");
@@ -59,7 +75,7 @@ async function main() {
     password: "Admin@123!",
     mobile: "+910000000001"
   });
-  await prisma.user.update({ where: { id: superAdmin.id }, data: { role: "SUPER_ADMIN" } });
+  await users().updateOne({ id: superAdmin.id }, { $set: { role: "SUPER_ADMIN" } });
 
   const password = "Password123!";
   const mkPlayer = async (i: number, overrides?: { mobile?: string }) => {
@@ -108,10 +124,10 @@ async function main() {
     lng: 77.6245
   });
 
-  await prisma.club.update({ where: { id: clubA.id }, data: { subscriptionPlan: "PREMIUM" } });
-  await prisma.club.update({ where: { id: clubB.id }, data: { subscriptionPlan: "PRO" } });
-  await prisma.club.update({ where: { id: clubC.id }, data: { subscriptionPlan: "PREMIUM" } });
-  await prisma.club.update({ where: { id: clubD.id }, data: { subscriptionPlan: "PRO" } });
+  await clubs().updateOne({ id: clubA.id }, { $set: { subscriptionPlan: "PREMIUM" } });
+  await clubs().updateOne({ id: clubB.id }, { $set: { subscriptionPlan: "PRO" } });
+  await clubs().updateOne({ id: clubC.id }, { $set: { subscriptionPlan: "PREMIUM" } });
+  await clubs().updateOne({ id: clubD.id }, { $set: { subscriptionPlan: "PRO" } });
 
   console.log("👥 Creating members…");
   const playersA: Awaited<ReturnType<typeof registerUser>>[] = [ownerA];
@@ -119,12 +135,12 @@ async function main() {
 
   for (let i = 1; i <= 15; i++) {
     const u = await mkPlayer(i);
-    await addMember(clubA.id, ownerA, { email: u.email, name: u.name, role: i === 2 ? "COACH" : i === 3 ? "ADMIN" : "PLAYER" });
+    await addMember(clubA.id, ownerA, { email: u.email!, name: u.name, role: i === 2 ? "COACH" : i === 3 ? "ADMIN" : "PLAYER" });
     playersA.push(u);
   }
   for (let i = 11; i <= 20; i++) {
     const u = await mkPlayer(i + 500);
-    await addMember(clubB.id, ownerB, { email: u.email, name: u.name, role: i === 12 ? "COACH" : "PLAYER" });
+    await addMember(clubB.id, ownerB, { email: u.email!, name: u.name, role: i === 12 ? "COACH" : "PLAYER" });
     playersB.push(u);
   }
 
@@ -143,13 +159,13 @@ async function main() {
     }
   }
 
-  const allMemberships = await prisma.clubMember.findMany();
+  const allMemberships = await clubMembers().find().toArray();
   for (const m of allMemberships) {
-    const wallet = await ensureWallet(prisma, m.clubId, m.userId);
-    if (wallet.balance === 0) {
-      await postTransaction(prisma, {
-        clubId: m.clubId,
-        userId: m.userId,
+    const wallet = await ensureWallet(null, m.clubId as string, m.userId as string);
+    if ((wallet.balance as number) === 0) {
+      await postTransaction(null, {
+        clubId: m.clubId as string,
+        userId: m.userId as string,
         amount: 50000,
         type: "OPENING_CREDIT",
         description: "Welcome bonus — happy smashing!",
@@ -159,8 +175,8 @@ async function main() {
   }
 
   console.log("📅 Attendance history (35 days)…");
-  const today = new Date();
   const attendanceRows: {
+    id: string;
     clubId: string;
     userId: string;
     day: string;
@@ -179,8 +195,9 @@ async function main() {
       else if (roll < 0.24) status = "ABSENT";
       else if (roll < 0.34) status = "LATE";
       attendanceRows.push({
-        clubId: m.clubId,
-        userId: m.userId,
+        id: cuid(),
+        clubId: m.clubId as string,
+        userId: m.userId as string,
         day,
         status,
         method: rng() < 0.7 ? "QR" : "MANUAL",
@@ -188,7 +205,9 @@ async function main() {
       });
     }
   }
-  await prisma.attendanceRecord.createMany({ data: attendanceRows });
+  if (attendanceRows.length > 0) {
+    await attendanceRecords().insertMany(attendanceRows);
+  }
 
   console.log("🏸 Simulating matches…");
   const skill = new Map<string, number>();
@@ -196,7 +215,7 @@ async function main() {
 
   async function simulateMatch(clubId: string, four: string[], dayOffset: number) {
     const shuffled = [...four].sort(() => rng() - 0.5);
-    const courts = await prisma.court.findMany({ where: { clubId, deletedAt: null, status: "AVAILABLE" }, take: 1 });
+    const courtList = await courts().find({ clubId, deletedAt: null, status: "AVAILABLE" }).limit(1).toArray();
     const when = new Date();
     when.setDate(when.getDate() + dayOffset);
     when.setHours(19, 0, 0, 0);
@@ -204,7 +223,7 @@ async function main() {
       type: "DOUBLES",
       teamAUserIds: [shuffled[0], shuffled[1]],
       teamBUserIds: [shuffled[2], shuffled[3]],
-      courtId: rng() < 0.6 ? courts[0]?.id ?? null : null,
+      courtId: rng() < 0.6 ? (courtList[0]?.id as string) ?? null : null,
       scheduledAt: when,
       notes: null,
       notify: false
@@ -242,12 +261,16 @@ async function main() {
   console.log("🧾 Yesterday's sweep (absence penalties)…");
   const yesterday = dayKeyOffset(-1);
   for (const m of allMemberships.slice(0, 6)) {
-    const exists = await prisma.attendanceRecord.findUnique({
-      where: { clubId_userId_day: { clubId: m.clubId, userId: m.userId, day: yesterday } }
-    });
+    const exists = await attendanceRecords().findOne({ clubId: m.clubId, userId: m.userId, day: yesterday });
     if (!exists) {
-      await prisma.attendanceRecord.create({
-        data: { clubId: m.clubId, userId: m.userId, day: yesterday, status: "ABSENT" }
+      await attendanceRecords().insertOne({
+        id: cuid(),
+        clubId: m.clubId,
+        userId: m.userId,
+        day: yesterday,
+        status: "ABSENT",
+        method: "MANUAL",
+        createdAt: new Date()
       });
     }
   }
@@ -267,14 +290,11 @@ async function main() {
   console.log("🏆 Tournament — Monsoon Smash Cup…");
   const t = await createTournament(clubA.id, ownerA, { name: "Monsoon Smash Cup", size: 8, fee: 20000 });
   for (const p of playersA.slice(0, 8)) {
-    await prisma.tournamentParticipant.create({ data: { tournamentId: t.id, userId: p.id } }).catch(() => {});
+    await tournamentParticipants().insertOne({ id: cuid(), tournamentId: t.id, userId: p.id, joinedAt: new Date() }).catch(() => {});
   }
   await startTournament(clubA.id, t.id, ownerA);
   for (const round of [1, 2]) {
-    const rms = await prisma.tournamentMatch.findMany({
-      where: { tournamentId: t.id, round },
-      orderBy: { slot: "asc" }
-    });
+    const rms = await tournamentMatches().find({ tournamentId: t.id, round }).sort({ slot: 1 }).toArray();
     for (const tm of rms) {
       if (tm.status !== "READY") continue;
       const sets: SetScore[] = [];
@@ -286,48 +306,50 @@ async function main() {
         if (s.a > s.b) wa++;
         else wb++;
       }
-      await submitScore(clubA.id, t.id, tm.id, ownerA, scoreToString(sets)).catch(() => {});
+      await submitScore(clubA.id, t.id, tm.id as string, ownerA, scoreToString(sets)).catch(() => {});
     }
   }
 
   console.log("🎥 Sample video analysis…");
   const videoOwner = playersA[1];
-  await prisma.videoAnalysis.create({
-    data: {
-      clubId: clubA.id,
-      userId: videoOwner.id,
-      originalName: "smash-drill-session.mp4",
-      storageKey: `videos/${clubA.id}/sample/smash-drill-session.mp4`,
-      mimeType: "video/mp4",
-      sizeBytes: 48_200_000,
-      status: "COMPLETED",
-      result: JSON.stringify({
-        footworkScore: 78,
-        shotAccuracy: 71,
-        courtCoverage: 83,
-        smashSpeedKmh: 96,
-        rallyCount: 22,
-        insights: [
-          "Your lunge recovery adds ~0.4s before the next shot — drill shadow footwork.",
-          "Backhand clears land short 68% of the time; strengthen wrist supination.",
-          "Strong net coverage — keep taking the shuttle early."
-        ]
-      }),
-      completedAt: new Date()
-    }
+  await videoAnalyses().insertOne({
+    id: cuid(),
+    clubId: clubA.id,
+    userId: videoOwner.id,
+    originalName: "smash-drill-session.mp4",
+    storageKey: `videos/${clubA.id}/sample/smash-drill-session.mp4`,
+    mimeType: "video/mp4",
+    sizeBytes: 48_200_000,
+    status: "COMPLETED",
+    result: JSON.stringify({
+      footworkScore: 78,
+      shotAccuracy: 71,
+      courtCoverage: 83,
+      smashSpeedKmh: 96,
+      rallyCount: 22,
+      insights: [
+        "Your lunge recovery adds ~0.4s before the next shot — drill shadow footwork.",
+        "Backhand clears land short 68% of the time; strengthen wrist supination.",
+        "Strong net coverage — keep taking the shuttle early."
+      ]
+    }),
+    completedAt: new Date(),
+    createdAt: new Date(),
+    updatedAt: new Date()
   });
 
   console.log("💰 A couple of court bookings…");
-  const courtRows = await prisma.court.findMany({ where: { clubId: clubA.id } });
+  const courtRows = await courts().find({ clubId: clubA.id }).toArray();
   const tomorrowAt = (h: number) => {
     const d = new Date();
     d.setDate(d.getDate() + 1);
     d.setHours(h, 0, 0, 0);
     return d;
   };
-  await prisma.courtBooking.createMany({
-    data: [
+  if (courtRows.length >= 2) {
+    await courtBookings().insertMany([
       {
+        id: cuid(),
         clubId: clubA.id,
         courtId: courtRows[0].id,
         userId: playersA[2].id,
@@ -335,9 +357,12 @@ async function main() {
         endTime: tomorrowAt(19),
         status: "CONFIRMED",
         amount: courtRows[0].hourlyFee,
-        notes: "Weekly doubles slot"
+        notes: "Weekly doubles slot",
+        createdAt: new Date(),
+        updatedAt: new Date()
       },
       {
+        id: cuid(),
         clubId: clubA.id,
         courtId: courtRows[1].id,
         userId: playersA[4].id,
@@ -345,10 +370,12 @@ async function main() {
         endTime: tomorrowAt(20),
         status: "CONFIRMED",
         amount: courtRows[1].hourlyFee,
-        notes: null
+        notes: null,
+        createdAt: new Date(),
+        updatedAt: new Date()
       }
-    ]
-  });
+    ]);
+  }
 
   console.log("🤝 Creating Play Groups & Cross-Club Sessions…");
   const squad = await createGroup(ownerA.id, {
@@ -374,14 +401,24 @@ async function main() {
   await rsvpSession(session1.id, playersA[2].id, "YES");
 
   const w = await getMyWallet(clubA.id, playersA[0].id);
+  await users().updateMany({}, { $set: { hasCompletedSetup: true } });
+
+  // A demo user that has NOT completed setup yet (registered with mobile)
+  await registerUser({
+    name: "Mobile Newbie",
+    mobile: "+919999999999",
+    password
+  });
+
   console.log(`✅ Seed complete.`);
   console.log(`   Clubs: ${clubA.name} (PREMIUM), ${clubB.name} (PRO)`);
   console.log(`   Members: ${allMemberships.length}`);
-  console.log(`   Example balance (${playersA[0].name}): ₹${(w.wallet?.balance ?? 0) / 100}`);
+  console.log(`   Example balance (${playersA[0].name}): ₹${((w.wallet?.balance as number) ?? 0) / 100}`);
   console.log("");
   console.log("   Super admin : admin@bcos.app / Admin@123!");
   console.log(`   Owner A     : ${ownerA.email} / ${password}`);
   console.log(`   Player      : player1@demo.club / ${password}`);
+  console.log(`   Needs Setup : 9999999999 / ${password}`);
 }
 
 main()
@@ -390,5 +427,5 @@ main()
     process.exit(1);
   })
   .finally(async () => {
-    await prisma.$disconnect();
+    await mongoClient.close();
   });

@@ -9,7 +9,7 @@ export const GET = handler(async (_req, { params }) => {
   const { id, videoId } = (await params) as { id: string; videoId: string };
   const ctx = await getClubContext(id, user);
   await assertFeature(ctx.club, FEATURES.VIDEO_ANALYSIS);
-  const v = await getVideo(id, videoId);
+  const v = (await getVideo(id, videoId)) as any;
   return ok({
     id: v.id,
     status: v.status,

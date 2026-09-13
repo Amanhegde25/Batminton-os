@@ -2,9 +2,9 @@ import { handler, ok, parseBody, getIp, ApiError } from "@/lib/api";
 import { z } from "zod";
 import { rateLimit } from "@/server/rate-limit";
 import { currentUser } from "@/server/auth/session";
-import { requireStaff, requireUser } from "@/server/rbac";
+import { requireUser } from "@/server/rbac";
 import { createClub, listPublicClubs } from "@/server/services/clubs";
-import { prisma } from "@/server/db";
+import { clubs } from "@/server/db";
 
 export const GET = handler(async (req) => {
   const user = await requireUser(await currentUser(req));
@@ -42,6 +42,6 @@ export const POST = handler(async (req) => {
   if (!rateLimit(`club-create:${getIp(req)}`, 5, 3600_000)) throw ApiError.tooMany();
   const input = await parseBody(req, createSchema);
   const club = await createClub(user, input);
-  const full = await prisma.club.findUnique({ where: { id: club.id } });
+  const full = await clubs().findOne({ id: club.id });
   return ok({ club: full }, { status: 201 });
 });

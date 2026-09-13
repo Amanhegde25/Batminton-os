@@ -1,13 +1,25 @@
-import { prisma, type Tx } from "@/server/db";
+import { playerRatings, ratingHistories } from "@/server/db";
 import { getRatingProvider, consistencyScore } from "@/lib/engines/elo";
 import { monthStartsBetween } from "@/lib/date";
+import { cuid } from "@/lib/id";
 
-export async function ensureRating(db: Tx, clubId: string, userId: string) {
-  return db.playerRating.upsert({
-    where: { clubId_userId: { clubId, userId } },
-    create: { clubId, userId },
-    update: {}
-  });
+export async function ensureRating(_db: unknown, clubId: string, userId: string) {
+  const existing = await playerRatings().findOne({ clubId, userId });
+  if (existing) return existing;
+  const rating = {
+    id: cuid(),
+    clubId,
+    userId,
+    rating: 1000,
+    peak: 1000,
+    wins: 0,
+    losses: 0,
+    walkovers: 0,
+    matchesPlayed: 0,
+    lastPlayedAt: null
+  };
+  await playerRatings().insertOne(rating);
+  return rating;
 }
 
 export interface ApplyResultInput {
@@ -24,17 +36,15 @@ export interface ApplyResultInput {
   walkover?: boolean;
 }
 
-export async function applyMatchResultToRatings(db: Tx, input: ApplyResultInput) {
+export async function applyMatchResultToRatings(_db: unknown, input: ApplyResultInput) {
   const allPlayers = [...input.playersA, ...input.playersB];
-  const existingRows = await db.playerRating.findMany({
-    where: { clubId: input.clubId, userId: { in: allPlayers } }
-  });
-  const rowMap = new Map(existingRows.map((r) => [r.userId, r]));
+  const existingRows = await playerRatings().find({ clubId: input.clubId, userId: { $in: allPlayers } }).toArray();
+  const rowMap = new Map(existingRows.map((r) => [r.userId as string, r]));
 
   const ratingsA =
-    input.ratingsA ?? input.playersA.map((id) => rowMap.get(id)?.rating ?? 1000);
+    input.ratingsA ?? input.playersA.map((id) => (rowMap.get(id)?.rating as number) ?? 1000);
   const ratingsB =
-    input.ratingsB ?? input.playersB.map((id) => rowMap.get(id)?.rating ?? 1000);
+    input.ratingsB ?? input.playersB.map((id) => (rowMap.get(id)?.rating as number) ?? 1000);
 
   const provider = getRatingProvider("elo");
   const out = provider.apply({
@@ -53,14 +63,14 @@ export async function applyMatchResultToRatings(db: Tx, input: ApplyResultInput)
 
   for (let i = 0; i < input.playersA.length; i++) {
     const userId = input.playersA[i];
-    await ensureRating(db, input.clubId, userId);
+    await ensureRating(null, input.clubId, userId);
     const after = out.newRatingsA[i];
     const before = ratingsA[i];
     histories.push({ userId, before, after, delta: out.deltaA, won: aWon });
   }
   for (let i = 0; i < input.playersB.length; i++) {
     const userId = input.playersB[i];
-    await ensureRating(db, input.clubId, userId);
+    await ensureRating(null, input.clubId, userId);
     const after = out.newRatingsB[i];
     const before = ratingsB[i];
     histories.push({ userId, before, after, delta: out.deltaB, won: !aWon });
@@ -68,31 +78,33 @@ export async function applyMatchResultToRatings(db: Tx, input: ApplyResultInput)
 
   for (const h of histories) {
     const current = rowMap.get(h.userId);
-    const newPeak = Math.max(current?.peak ?? h.before, h.after);
-    await db.playerRating.update({
-      where: { clubId_userId: { clubId: input.clubId, userId: h.userId } },
-      data: {
-        rating: h.after,
-        peak: newPeak,
-        wins: { increment: h.won ? 1 : 0 },
-        losses: { increment: h.won ? 0 : 1 },
-        walkovers: { increment: input.walkover && !h.won ? 1 : 0 },
-        matchesPlayed: { increment: 1 },
-        lastPlayedAt: now
+    const newPeak = Math.max((current?.peak as number) ?? h.before, h.after);
+    await playerRatings().updateOne(
+      { clubId: input.clubId, userId: h.userId },
+      {
+        $set: { rating: h.after, peak: newPeak, lastPlayedAt: now },
+        $inc: {
+          wins: h.won ? 1 : 0,
+          losses: h.won ? 0 : 1,
+          walkovers: input.walkover && !h.won ? 1 : 0,
+          matchesPlayed: 1
+        }
       }
-    });
+    );
   }
 
-  await db.ratingHistory.createMany({
-    data: histories.map((h) => ({
+  await ratingHistories().insertMany(
+    histories.map((h) => ({
+      id: cuid(),
       clubId: input.clubId,
       userId: h.userId,
       matchId: input.matchId,
       ratingBefore: h.before,
       ratingAfter: h.after,
-      delta: h.delta
+      delta: h.delta,
+      createdAt: now
     }))
-  });
+  );
 
   return {
     deltas: Object.fromEntries(histories.map((h) => [h.userId, Math.round(h.delta)])),
@@ -101,34 +113,28 @@ export async function applyMatchResultToRatings(db: Tx, input: ApplyResultInput)
 }
 
 export async function getPlayerRatingCard(clubId: string, userId: string) {
-  const rating = await prisma.playerRating.findUnique({
-    where: { clubId_userId: { clubId, userId } }
-  });
-  const history = await prisma.ratingHistory.findMany({
-    where: { clubId, userId },
-    orderBy: { createdAt: "asc" },
-    take: 200
-  });
+  const rating = await playerRatings().findOne({ clubId, userId });
+  const history = await ratingHistories().find({ clubId, userId }).sort({ createdAt: 1 }).limit(200).toArray();
   const now = new Date();
   const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const monthlyDelta = history
-    .filter((h) => h.createdAt >= thisMonthStart)
-    .reduce((s, h) => s + h.delta, 0);
+    .filter((h) => (h.createdAt as Date) >= thisMonthStart)
+    .reduce((s, h) => s + (h.delta as number), 0);
   return {
-    rating: rating ? Math.round(rating.rating) : 1000,
-    peak: rating ? Math.round(rating.peak) : 1000,
-    wins: rating?.wins ?? 0,
-    losses: rating?.losses ?? 0,
-    matchesPlayed: rating?.matchesPlayed ?? 0,
-    winRate: rating && rating.matchesPlayed > 0 ? Math.round((rating.wins / rating.matchesPlayed) * 100) : 0,
+    rating: rating ? Math.round(rating.rating as number) : 1000,
+    peak: rating ? Math.round(rating.peak as number) : 1000,
+    wins: (rating?.wins as number) ?? 0,
+    losses: (rating?.losses as number) ?? 0,
+    matchesPlayed: (rating?.matchesPlayed as number) ?? 0,
+    winRate: rating && (rating.matchesPlayed as number) > 0 ? Math.round(((rating.wins as number) / (rating.matchesPlayed as number)) * 100) : 0,
     monthlyDelta: Math.round(monthlyDelta),
-    consistency: consistencyScore(history.slice(-20).map((h) => h.delta)),
+    consistency: consistencyScore(history.slice(-20).map((h) => h.delta as number)),
     historyPoints: history.map((h) => ({
-      date: h.createdAt.toISOString(),
-      value: Math.round(h.ratingAfter),
-      delta: Math.round(h.delta * 10) / 10
+      date: (h.createdAt as Date).toISOString(),
+      value: Math.round(h.ratingAfter as number),
+      delta: Math.round((h.delta as number) * 10) / 10
     })),
-    trend: buildMonthlyTrend(history, now)
+    trend: buildMonthlyTrend(history as any, now)
   };
 }
 

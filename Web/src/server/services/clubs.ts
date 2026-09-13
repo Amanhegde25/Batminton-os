@@ -1,8 +1,9 @@
-import { prisma } from "@/server/db";
+import { clubs, clubMembers, penaltyRules } from "@/server/db";
 import { ApiError } from "@/lib/api";
 import { DEFAULT_PENALTY_RULES, parseClubSettings, type ClubSettings } from "@/lib/constants";
 import { audit } from "./audit";
 import type { SessionUser } from "@/server/auth/types";
+import { cuid } from "@/lib/id";
 
 function slugify(name: string): string {
   return name
@@ -15,7 +16,7 @@ function slugify(name: string): string {
 async function uniqueSlug(base: string): Promise<string> {
   let candidate = slugify(base) || "club";
   for (let i = 0; i < 50; i++) {
-    const taken = await prisma.club.findUnique({ where: { slug: candidate } });
+    const taken = await clubs().findOne({ slug: candidate });
     if (!taken) return candidate;
     candidate = `${slugify(base)}-${i + 2}`;
   }
@@ -24,36 +25,61 @@ async function uniqueSlug(base: string): Promise<string> {
 
 export async function createClub(user: SessionUser, input: CreateClubInput) {
   const slug = input.slug ? await uniqueSlug(input.slug) : await uniqueSlug(input.name);
-  const club = await prisma.club.create({
-    data: {
-      name: input.name.trim(),
-      slug,
-      description: input.description,
-      city: input.city,
-      address: input.address,
-      logoUrl: input.logoUrl,
-      lat: input.lat,
-      lng: input.lng,
-      ownerId: user.id,
-      subscriptionPlan: "FREE",
-      settings: JSON.stringify(parseClubSettings(null)),
-      members: { create: { userId: user.id, role: "OWNER", status: "ACTIVE" } },
-      penaltyRules: {
-        create: DEFAULT_PENALTY_RULES.map((r) => ({
-          eventType: r.eventType,
-          label: r.label,
-          amount: r.amount,
-          enabled: r.enabled
-        }))
-      }
-    }
+  const now = new Date();
+  const clubId = cuid();
+  const club = {
+    id: clubId,
+    name: input.name.trim(),
+    slug,
+    description: input.description ?? null,
+    city: input.city ?? null,
+    address: input.address ?? null,
+    logoUrl: input.logoUrl ?? null,
+    lat: input.lat ?? null,
+    lng: input.lng ?? null,
+    ownerId: user.id,
+    subscriptionPlan: "FREE",
+    settings: JSON.stringify(parseClubSettings(null)),
+    sport: "BADMINTON",
+    isPublic: true,
+    createdAt: now,
+    updatedAt: now,
+    deletedAt: null
+  };
+  await clubs().insertOne(club);
+
+  // Create owner membership
+  await clubMembers().insertOne({
+    id: cuid(),
+    clubId,
+    userId: user.id,
+    role: "OWNER",
+    status: "ACTIVE",
+    joinedAt: now,
+    removedAt: null
   });
+
+  // Create default penalty rules
+  const rules = DEFAULT_PENALTY_RULES.map((r) => ({
+    id: cuid(),
+    clubId,
+    eventType: r.eventType,
+    label: r.label,
+    amount: r.amount,
+    enabled: r.enabled,
+    createdAt: now,
+    updatedAt: now
+  }));
+  if (rules.length > 0) {
+    await penaltyRules().insertMany(rules);
+  }
+
   await audit({
-    clubId: club.id,
+    clubId,
     actorUserId: user.id,
     action: "club.created",
     entityType: "Club",
-    entityId: club.id,
+    entityId: clubId,
     newValue: { name: club.name }
   });
   return club;
@@ -71,26 +97,29 @@ export interface CreateClubInput {
 }
 
 export async function updateClub(clubId: string, user: SessionUser, patch: UpdateClubPatch) {
-  const before = await prisma.club.findFirst({ where: { id: clubId, deletedAt: null } });
+  const before = await clubs().findOne({ id: clubId, deletedAt: null });
   if (!before) throw ApiError.notFound("Club not found");
-  const settingsBefore = parseClubSettings(before.settings);
+  const settingsBefore = parseClubSettings(before.settings as string);
   const mergedSettings = patch.settings
     ? mergeSettings(settingsBefore, patch.settings)
     : null;
-  const after = await prisma.club.update({
-    where: { id: clubId },
-    data: {
-      ...(patch.name !== undefined ? { name: patch.name.trim() } : {}),
-      ...(patch.description !== undefined ? { description: patch.description } : {}),
-      ...(patch.city !== undefined ? { city: patch.city } : {}),
-      ...(patch.address !== undefined ? { address: patch.address } : {}),
-      ...(patch.logoUrl !== undefined ? { logoUrl: patch.logoUrl } : {}),
-      ...(patch.isPublic !== undefined ? { isPublic: patch.isPublic } : {}),
-      ...(patch.lat !== undefined ? { lat: patch.lat } : {}),
-      ...(patch.lng !== undefined ? { lng: patch.lng } : {}),
-      ...(mergedSettings ? { settings: JSON.stringify(mergedSettings) } : {})
-    }
-  });
+  const data: Record<string, unknown> = { updatedAt: new Date() };
+  if (patch.name !== undefined) data.name = patch.name.trim();
+  if (patch.description !== undefined) data.description = patch.description;
+  if (patch.city !== undefined) data.city = patch.city;
+  if (patch.address !== undefined) data.address = patch.address;
+  if (patch.logoUrl !== undefined) data.logoUrl = patch.logoUrl;
+  if (patch.isPublic !== undefined) data.isPublic = patch.isPublic;
+  if (patch.lat !== undefined) data.lat = patch.lat;
+  if (patch.lng !== undefined) data.lng = patch.lng;
+  if (mergedSettings) data.settings = JSON.stringify(mergedSettings);
+
+  const after = await clubs().findOneAndUpdate(
+    { id: clubId },
+    { $set: data },
+    { returnDocument: "after" }
+  );
+  if (!after) throw ApiError.notFound("Club not found");
   await audit({
     clubId,
     actorUserId: user.id,
@@ -116,7 +145,7 @@ export interface UpdateClubPatch {
 }
 
 type DeepPartial<T> = {
-  [K in keyof T]?: T[K] extends object ? DeepPartial<T[K]> : T[K];
+  [K in keyof T]?: T[K] extends object | undefined ? DeepPartial<NonNullable<T[K]>> : T[K];
 };
 
 function mergeSettings(base: ClubSettings, patch: DeepPartial<ClubSettings>): ClubSettings {
@@ -126,20 +155,30 @@ function mergeSettings(base: ClubSettings, patch: DeepPartial<ClubSettings>): Cl
     attendance: { ...base.attendance, ...(patch.attendance ?? {}) },
     booking: { ...base.booking, ...(patch.booking ?? {}) },
     membership: { ...base.membership, ...(patch.membership ?? {}) },
-    matchmaking: { ...(base.matchmaking ?? {}), ...(patch.matchmaking ?? {}) }
+    matchmaking: {
+      allowAbsent: patch.matchmaking?.allowAbsent ?? base.matchmaking?.allowAbsent ?? false
+    }
   };
 }
 
 export async function getClubForUser(clubId: string) {
-  const club = await prisma.club.findFirst({
-    where: { id: clubId, deletedAt: null },
-    include: {
-      owner: { select: { id: true, name: true, photoUrl: true } },
-      _count: { select: { members: true, courts: true, matches: true } }
-    }
-  });
+  const club = await clubs().findOne({ id: clubId, deletedAt: null });
   if (!club) throw ApiError.notFound("Club not found");
-  return club;
+
+  const owner = await (await import("@/server/db")).users().findOne(
+    { id: club.ownerId as string },
+    { projection: { id: 1, name: 1, photoUrl: 1, _id: 0 } }
+  );
+  const [memberCount, courtCount, matchCount] = await Promise.all([
+    clubMembers().countDocuments({ clubId }),
+    (await import("@/server/db")).courts().countDocuments({ clubId }),
+    (await import("@/server/db")).matches().countDocuments({ clubId })
+  ]);
+  return {
+    ...club,
+    owner,
+    _count: { members: memberCount, courts: courtCount, matches: matchCount }
+  };
 }
 
 function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -162,74 +201,65 @@ export interface ListClubsOptions {
 }
 
 export async function listPublicClubs(q?: string, userId?: string, options?: ListClubsOptions) {
-  const clubs = await prisma.club.findMany({
-    where: {
-      deletedAt: null,
-      isPublic: true,
-      ...(options?.excludeClubId ? { id: { not: options.excludeClubId } } : {}),
-      ...(q
-        ? {
-            OR: [
-              { name: { contains: q } },
-              { city: { contains: q } },
-              { address: { contains: q } }
-            ]
-          }
-        : {})
-    },
-    select: {
-      id: true,
-      name: true,
-      slug: true,
-      city: true,
-      address: true,
-      lat: true,
-      lng: true,
-      logoUrl: true,
-      description: true,
-      subscriptionPlan: true,
-      sport: true,
-      _count: { select: { members: true, courts: true } }
-    },
-    orderBy: { createdAt: "desc" },
-    take: 60
-  });
-
-  // Look up the current user's memberships for all returned clubs
-  let membershipMap = new Map<string, { id: string; status: string; role: string }>();
-  if (userId) {
-    const memberships = await prisma.clubMember.findMany({
-      where: { userId, clubId: { in: clubs.map((c) => c.id) } },
-      select: { id: true, clubId: true, status: true, role: true }
-    });
-    membershipMap = new Map(memberships.map((m) => [m.clubId, { id: m.id, status: m.status, role: m.role }]));
+  const filter: Record<string, unknown> = { deletedAt: null, isPublic: true };
+  if (options?.excludeClubId) filter.id = { $ne: options.excludeClubId };
+  if (q) {
+    filter.$or = [
+      { name: { $regex: q, $options: "i" } },
+      { city: { $regex: q, $options: "i" } },
+      { address: { $regex: q, $options: "i" } }
+    ];
   }
 
-  const results = clubs.map((c) => {
+  const rawClubs = await clubs().find(filter).sort({ createdAt: -1 }).limit(60).toArray();
+
+  // Count members and courts for each club
+  const clubIds = rawClubs.map((c) => c.id as string);
+  const memberCounts = await clubMembers().aggregate([
+    { $match: { clubId: { $in: clubIds } } },
+    { $group: { _id: "$clubId", count: { $sum: 1 } } }
+  ]).toArray();
+  const courtCounts = await (await import("@/server/db")).courts().aggregate([
+    { $match: { clubId: { $in: clubIds } } },
+    { $group: { _id: "$clubId", count: { $sum: 1 } } }
+  ]).toArray();
+  const memberCountMap = new Map(memberCounts.map((m) => [m._id, m.count]));
+  const courtCountMap = new Map(courtCounts.map((c) => [c._id, c.count]));
+
+  // Look up user's memberships
+  let membershipMap = new Map<string, { id: string; status: string; role: string }>();
+  if (userId) {
+    const memberships = await clubMembers().find(
+      { userId, clubId: { $in: clubIds } },
+      { projection: { id: 1, clubId: 1, status: 1, role: 1, _id: 0 } }
+    ).toArray();
+    membershipMap = new Map(memberships.map((m) => [m.clubId as string, { id: m.id as string, status: m.status as string, role: m.role as string }]));
+  }
+
+  const results = rawClubs.map((c) => {
     let distanceKm: number | null = null;
     if (options?.lat != null && options?.lng != null && c.lat != null && c.lng != null) {
-      distanceKm = haversineKm(options.lat, options.lng, c.lat, c.lng);
+      distanceKm = haversineKm(options.lat, options.lng, c.lat as number, c.lng as number);
     }
     return {
-      id: c.id,
-      name: c.name,
-      slug: c.slug,
-      city: c.city,
-      address: c.address,
-      lat: c.lat,
-      lng: c.lng,
-      logoUrl: c.logoUrl,
-      description: c.description,
-      subscriptionPlan: c.subscriptionPlan,
-      sport: c.sport,
-      courtCount: c._count.courts,
-      memberCount: c._count.members,
+      id: c.id as string,
+      name: c.name as string,
+      slug: c.slug as string,
+      city: (c.city as string) ?? null,
+      address: (c.address as string) ?? null,
+      lat: (c.lat as number) ?? null,
+      lng: (c.lng as number) ?? null,
+      logoUrl: (c.logoUrl as string) ?? null,
+      description: (c.description as string) ?? null,
+      subscriptionPlan: c.subscriptionPlan as string,
+      sport: c.sport as string,
+      courtCount: courtCountMap.get(c.id) ?? 0,
+      memberCount: memberCountMap.get(c.id) ?? 0,
       distanceKm,
-      membership: membershipMap.get(c.id) ?? null
+      membership: membershipMap.get(c.id as string) ?? null
     };
   });
 
-  // If user provided coordinates, sort primarily by distance
   if (options?.lat != null && options?.lng != null) {
     results.sort((a, b) => {
       if (a.distanceKm != null && b.distanceKm != null) return a.distanceKm - b.distanceKm;

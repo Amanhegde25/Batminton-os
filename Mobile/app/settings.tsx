@@ -29,7 +29,9 @@ export default function SettingsScreen() {
   const { me, refreshClubContext, activeClub } = useClub();
 
   const [name, setName] = useState(user?.name || "");
+  const [email, setEmail] = useState(user?.email || "");
   const [mobile, setMobile] = useState(user?.mobile || "");
+  const [aadhar, setAadhar] = useState(user?.aadhar || "");
   const [hand, setHand] = useState(user?.dominantHand || "RIGHT");
   const [style, setStyle] = useState(user?.playingStyle || "ALL_ROUND");
   const [time, setTime] = useState(user?.preferredTime || "EVENING");
@@ -38,7 +40,9 @@ export default function SettingsScreen() {
     mutationFn: () =>
       api.users.updateProfile({
         name,
-        mobile,
+        email: email.trim() || undefined,
+        mobile: mobile.trim() || undefined,
+        aadhar: aadhar.replace(/\D/g, "") || undefined,
         dominantHand: hand,
         playingStyle: style,
         preferredTime: time
@@ -84,6 +88,19 @@ export default function SettingsScreen() {
           </View>
 
           <View style={styles.field}>
+            <Text style={styles.label}>Email Address</Text>
+            <TextInput
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              style={styles.input}
+              placeholder="you@example.com"
+              placeholderTextColor={colors.textSubtle}
+            />
+          </View>
+
+          <View style={styles.field}>
             <Text style={styles.label}>Mobile Number</Text>
             <TextInput
               value={mobile}
@@ -91,6 +108,19 @@ export default function SettingsScreen() {
               keyboardType="phone-pad"
               style={styles.input}
               placeholder="+91 98765 43210"
+              placeholderTextColor={colors.textSubtle}
+            />
+          </View>
+
+          <View style={styles.field}>
+            <Text style={styles.label}>Aadhaar Number (Optional)</Text>
+            <TextInput
+              value={aadhar}
+              onChangeText={setAadhar}
+              keyboardType="numeric"
+              maxLength={12}
+              style={styles.input}
+              placeholder="12-digit Aadhaar number"
               placeholderTextColor={colors.textSubtle}
             />
           </View>

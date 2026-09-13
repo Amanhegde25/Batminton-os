@@ -10,12 +10,12 @@ import {
   getMatch,
   startMatch
 } from "@/server/services/matches";
+import { matches } from "@/server/db";
 
 async function resolveClubId(id: string, matchId: string): Promise<string> {
   if (id && id !== "_" && id !== "undefined") return id;
-  const { prisma } = await import("@/server/db");
-  const m = await prisma.match.findUnique({ where: { id: matchId } });
-  if (m) return m.clubId;
+  const m = await matches().findOne({ id: matchId });
+  if (m) return m.clubId as string;
   return id;
 }
 
@@ -72,7 +72,7 @@ const patchSchema = z.object({
 
 export const PATCH = handler(async (req, { params }) => {
   const user = await requireUser(await currentUser());
-  const { id, matchId } = await params as { id: string; matchId: string };
+  const { id, matchId } = (await params) as { id: string; matchId: string };
   await requireManagerOrCoach(id, user);
   const input = await parseBody(req, patchSchema);
   return ok(

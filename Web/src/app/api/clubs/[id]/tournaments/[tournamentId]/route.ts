@@ -2,12 +2,12 @@ import { handler, ok } from "@/lib/api";
 import { currentUser } from "@/server/auth/session";
 import { getClubContext, requireUser } from "@/server/rbac";
 import { detail } from "@/server/services/tournaments";
+import { tournaments } from "@/server/db";
 
 async function resolveClubId(id: string, tournamentId: string): Promise<string> {
   if (id && id !== "_" && id !== "undefined") return id;
-  const { prisma } = await import("@/server/db");
-  const t = await prisma.tournament.findUnique({ where: { id: tournamentId } });
-  if (t) return t.clubId;
+  const t = await tournaments().findOne({ id: tournamentId });
+  if (t) return t.clubId as string;
   return id;
 }
 

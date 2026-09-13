@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import type { SessionUser } from "./types";
 import { SESSION_COOKIE, SESSION_TTL_SECONDS } from "@/lib/constants";
 import { signToken, verifyToken } from "./tokens";
-import { prisma } from "@/server/db";
+import { users } from "@/server/db";
 
 interface CookiePayload {
   sub: string;
@@ -79,17 +79,16 @@ export async function currentUser(req?: Request): Promise<SessionUser | null> {
   if (!token) return null;
   const payload = verifyToken(token);
   if (!payload || payload.typ) return null;
-  const user = await prisma.user.findUnique({ where: { id: payload.sub } });
+  const user = await users().findOne({ id: payload.sub });
   if (!user || user.deletedAt) return null;
   if (user.tokenVersion !== (payload as CookiePayload).tv) return null;
   return {
-    id: user.id,
-    email: user.email,
-    mobile: user.mobile,
-    name: user.name,
-    photoUrl: user.photoUrl,
-    role: user.role,
-    tokenVersion: user.tokenVersion
+    id: user.id as string,
+    email: user.email as string,
+    mobile: (user.mobile as string) ?? null,
+    name: user.name as string,
+    photoUrl: (user.photoUrl as string) ?? null,
+    role: user.role as string,
+    tokenVersion: user.tokenVersion as number
   };
 }
-

@@ -1,9 +1,10 @@
-import { prisma } from "@/server/db";
+import { tournaments, tournamentParticipants, tournamentMatches, playerRatings, users } from "@/server/db";
 import { ApiError } from "@/lib/api";
 import { scoreToString, parseScoreString, validateMatchSets } from "@/lib/engines/scoring";
 import { postTransaction } from "./wallets";
 import { notify } from "./notifications";
 import { audit } from "./audit";
+import { cuid } from "@/lib/id";
 
 export async function createTournament(
   clubId: string,
@@ -11,25 +12,34 @@ export async function createTournament(
   input: { name: string; size: number; fee?: number; startsAt?: Date | null }
 ) {
   if (![4, 8, 16, 32].includes(input.size)) throw ApiError.badRequest("Tournament size must be 4, 8, 16 or 32");
-  return prisma.tournament.create({
-    data: {
-      clubId,
-      name: input.name.trim(),
-      format: "KNOCKOUT",
-      size: input.size,
-      fee: Math.max(0, input.fee ?? 0),
-      startsAt: input.startsAt ?? null,
-      createdById: actor.id
-    }
-  });
+  const t = {
+    id: cuid(),
+    clubId,
+    name: input.name.trim(),
+    format: "KNOCKOUT",
+    status: "REGISTRATION",
+    size: input.size,
+    fee: Math.max(0, input.fee ?? 0),
+    startsAt: input.startsAt ?? null,
+    winnerUserId: null,
+    runnerUpUserId: null,
+    thirdPlaceUserId: null,
+    createdById: actor.id,
+    createdAt: new Date(),
+    deletedAt: null
+  };
+  await tournaments().insertOne(t);
+  return t;
 }
 
 export async function listTournaments(clubId: string) {
-  return prisma.tournament.findMany({
-    where: { clubId, deletedAt: null },
-    orderBy: { createdAt: "desc" },
-    include: { _count: { select: { participants: true } } }
-  });
+  const items = await tournaments().find({ clubId, deletedAt: null }).sort({ createdAt: -1 }).toArray();
+  const counts = await tournamentParticipants().aggregate([
+    { $match: { tournamentId: { $in: items.map((i) => i.id) } } },
+    { $group: { _id: "$tournamentId", count: { $sum: 1 } } }
+  ]).toArray();
+  const countMap = new Map(counts.map((c) => [c._id, c.count]));
+  return items.map((t) => ({ ...t, _count: { participants: countMap.get(t.id) ?? 0 } }));
 }
 
 export async function registerParticipant(
@@ -38,29 +48,26 @@ export async function registerParticipant(
   actor: { id: string },
   forUserId?: string
 ) {
-  const t = await prisma.tournament.findFirst({ where: { id: tournamentId, clubId } });
+  const t = await tournaments().findOne({ id: tournamentId, clubId });
   if (!t) throw ApiError.notFound("Tournament not found");
   if (t.status !== "REGISTRATION") throw ApiError.conflict("Registration is closed");
   const userId = forUserId ?? actor.id;
-  const count = await prisma.tournamentParticipant.count({ where: { tournamentId } });
-  if (count >= t.size) throw ApiError.conflict("Tournament is full");
-  const existing = await prisma.tournamentParticipant.findUnique({
-    where: { tournamentId_userId: { tournamentId, userId } }
-  });
+  const count = await tournamentParticipants().countDocuments({ tournamentId });
+  if (count >= (t.size as number)) throw ApiError.conflict("Tournament is full");
+  const existing = await tournamentParticipants().findOne({ tournamentId, userId });
   if (existing) throw ApiError.conflict("Already registered");
-  const participant = await prisma.tournamentParticipant.create({ data: { tournamentId, userId } });
-  if (t.fee > 0) {
-    await prisma.$transaction((tx) =>
-      postTransaction(tx, {
-        clubId,
-        userId,
-        amount: -t.fee,
-        type: "TOURNAMENT_FEE",
-        description: `Entry fee: ${t.name}`,
-        relatedType: "Tournament",
-        relatedId: tournamentId
-      })
-    );
+  const participant = { id: cuid(), tournamentId, userId, seed: null, eliminatedRound: null };
+  await tournamentParticipants().insertOne(participant);
+  if ((t.fee as number) > 0) {
+    await postTransaction(null, {
+      clubId,
+      userId,
+      amount: -(t.fee as number),
+      type: "TOURNAMENT_FEE",
+      description: `Entry fee: ${t.name}`,
+      relatedType: "Tournament",
+      relatedId: tournamentId
+    });
   }
   await audit({
     clubId,
@@ -74,58 +81,61 @@ export async function registerParticipant(
 }
 
 export async function startTournament(clubId: string, tournamentId: string, actor: { id: string }) {
-  const t = await prisma.tournament.findFirst({
-    where: { id: tournamentId, clubId },
-    include: {
-      participants: { include: { user: { select: { name: true } } } },
-      matches: true
-    }
-  });
+  const t = await tournaments().findOne({ id: tournamentId, clubId });
   if (!t) throw ApiError.notFound("Tournament not found");
   if (t.status !== "REGISTRATION") throw ApiError.conflict("Tournament already started");
-  if (t.matches.length > 0) throw ApiError.conflict("Bracket already generated");
+  const existingMatches = await tournamentMatches().countDocuments({ tournamentId });
+  if (existingMatches > 0) throw ApiError.conflict("Bracket already generated");
 
-  const ratings = await prisma.playerRating.findMany({
-    where: { clubId, userId: { in: t.participants.map((p) => p.userId) } }
-  });
-  const ratingMap = new Map(ratings.map((r) => [r.userId, r.rating]));
-  const seeded = [...t.participants].sort((a, b) => (ratingMap.get(b.userId) ?? 1000) - (ratingMap.get(a.userId) ?? 1000));
+  const participants = await tournamentParticipants().find({ tournamentId }).toArray();
+  const ratings = await playerRatings().find({ clubId, userId: { $in: participants.map((p) => p.userId as string) } }).toArray();
+  const ratingMap = new Map(ratings.map((r) => [r.userId as string, r.rating as number]));
+  const seeded = [...participants].sort((a, b) => (ratingMap.get(b.userId as string) ?? 1000) - (ratingMap.get(a.userId as string) ?? 1000));
   await Promise.all(
-    seeded.map((p, i) => prisma.tournamentParticipant.update({ where: { id: p.id }, data: { seed: i + 1 } }))
+    seeded.map((p, i) => tournamentParticipants().updateOne({ id: p.id }, { $set: { seed: i + 1 } }))
   );
 
-  const size = t.size;
+  const size = t.size as number;
   const totalRounds = Math.log2(size);
   const order = seedOrder(size);
   const slots: (string | null)[] = new Array(size).fill(null);
   for (let i = 0; i < order.length; i++) {
     const seedNo = order[i];
-    if (seedNo <= seeded.length) slots[i] = seeded[seedNo - 1].userId;
+    if (seedNo <= seeded.length) slots[i] = seeded[seedNo - 1].userId as string;
   }
 
   for (let round = 1; round <= totalRounds; round++) {
     const matchCount = size / Math.pow(2, round);
-    await prisma.tournamentMatch.createMany({
-      data: Array.from({ length: matchCount }, (_, slot) => ({
-        tournamentId,
-        round,
-        slot
-      }))
-    });
+    const matchDocs = Array.from({ length: matchCount }, (_, slot) => ({
+      id: cuid(),
+      tournamentId,
+      round,
+      slot,
+      playerAId: null,
+      playerBId: null,
+      setsText: null,
+      winnerId: null,
+      status: "PENDING",
+      playedMatchId: null
+    }));
+    await tournamentMatches().insertMany(matchDocs);
   }
 
   for (let slot = 0; slot < size / 2; slot++) {
     const a = slots[slot * 2];
     const b = slots[slot * 2 + 1];
-    await prisma.tournamentMatch.updateMany({
-      where: { tournamentId, round: 1, slot },
-      data: { playerAId: a, playerBId: b, status: a && b ? "READY" : "PENDING" }
-    });
+    await tournamentMatches().updateOne(
+      { tournamentId, round: 1, slot },
+      { $set: { playerAId: a, playerBId: b, status: a && b ? "READY" : "PENDING" } }
+    );
     if (a && !b) await advanceWinner(tournamentId, 1, slot, a);
     else if (!a && b) await advanceWinner(tournamentId, 1, slot, b);
   }
 
-  await prisma.tournament.update({ where: { id: tournamentId }, data: { status: "ONGOING", startsAt: t.startsAt ?? new Date() } });
+  await tournaments().updateOne(
+    { id: tournamentId },
+    { $set: { status: "ONGOING", startsAt: t.startsAt ?? new Date() } }
+  );
   await audit({
     clubId,
     actorUserId: actor.id,
@@ -136,7 +146,7 @@ export async function startTournament(clubId: string, tournamentId: string, acto
   });
   for (const p of seeded) {
     await notify({
-      userId: p.userId,
+      userId: p.userId as string,
       clubId,
       type: "TOURNAMENT_ANNOUNCED",
       title: `${t.name} bracket is live`,
@@ -153,7 +163,7 @@ export async function submitScore(
   actor: { id: string },
   setsText: string
 ) {
-  const tm = await prisma.tournamentMatch.findFirst({ where: { id: tmId, tournamentId } });
+  const tm = await tournamentMatches().findOne({ id: tmId, tournamentId });
   if (!tm) throw ApiError.notFound("Bracket match not found");
   if (tm.status === "COMPLETED") throw ApiError.conflict("Already completed");
   if (!tm.playerAId || !tm.playerBId || tm.status !== "READY") throw ApiError.conflict("Both players must be decided first");
@@ -163,22 +173,22 @@ export async function submitScore(
   if (!validation.ok || !validation.winnerTeam) throw ApiError.badRequest(validation.error ?? "Invalid score");
   const winnerId = validation.winnerTeam === "A" ? tm.playerAId : tm.playerBId;
 
-  await prisma.tournamentMatch.update({
-    where: { id: tmId },
-    data: { setsText: scoreToString(sets), winnerId, status: "COMPLETED" }
-  });
+  await tournamentMatches().updateOne(
+    { id: tmId },
+    { $set: { setsText: scoreToString(sets), winnerId, status: "COMPLETED" } }
+  );
 
-  const t = await prisma.tournament.findUnique({ where: { id: tournamentId }, select: { name: true, size: true } });
-  const finalRound = Math.log2(t?.size ?? 8);
+  const t = await tournaments().findOne({ id: tournamentId }, { projection: { name: 1, size: 1 } });
+  const finalRound = Math.log2((t?.size as number) ?? 8);
 
-  if (tm.round === finalRound) {
+  if ((tm.round as number) === finalRound) {
     const loserId = winnerId === tm.playerAId ? tm.playerBId! : tm.playerAId!;
-    await prisma.tournament.update({
-      where: { id: tournamentId },
-      data: { status: "COMPLETED", winnerUserId: winnerId, runnerUpUserId: loserId }
-    });
+    await tournaments().updateOne(
+      { id: tournamentId },
+      { $set: { status: "COMPLETED", winnerUserId: winnerId, runnerUpUserId: loserId } }
+    );
     await notify({
-      userId: winnerId,
+      userId: winnerId as string,
       clubId,
       type: "TOURNAMENT_RESULT",
       title: `Champion: ${t?.name ?? "Tournament"}`,
@@ -193,9 +203,9 @@ export async function submitScore(
       newValue: { winnerId }
     });
   } else {
-    await advanceWinner(tournamentId, tm.round, tm.slot, winnerId);
+    await advanceWinner(tournamentId, tm.round as number, tm.slot as number, winnerId as string);
     await notify({
-      userId: winnerId,
+      userId: winnerId as string,
       clubId,
       type: "TOURNAMENT_RESULT",
       title: "You advanced",
@@ -203,24 +213,22 @@ export async function submitScore(
     });
   }
 
-  return prisma.tournamentMatch.findUnique({ where: { id: tmId } });
+  return tournamentMatches().findOne({ id: tmId });
 }
 
 async function advanceWinner(tournamentId: string, round: number, slot: number, winnerId: string): Promise<void> {
   const nextRound = round + 1;
   const nextSlot = Math.floor(slot / 2);
   const isA = slot % 2 === 0;
-  const next = await prisma.tournamentMatch.findUnique({
-    where: { tournamentId_round_slot: { tournamentId, round: nextRound, slot: nextSlot } }
-  });
+  const next = await tournamentMatches().findOne({ tournamentId, round: nextRound, slot: nextSlot });
   if (!next) return;
-  await prisma.tournamentMatch.update({
-    where: { id: next.id },
-    data: isA ? { playerAId: winnerId } : { playerBId: winnerId }
-  });
-  const updated = await prisma.tournamentMatch.findUnique({ where: { id: next.id } });
+  await tournamentMatches().updateOne(
+    { id: next.id },
+    { $set: isA ? { playerAId: winnerId } : { playerBId: winnerId } }
+  );
+  const updated = await tournamentMatches().findOne({ id: next.id });
   if (updated?.playerAId && updated?.playerBId) {
-    await prisma.tournamentMatch.update({ where: { id: next.id }, data: { status: "READY" } });
+    await tournamentMatches().updateOne({ id: next.id }, { $set: { status: "READY" } });
   }
 }
 
@@ -238,34 +246,47 @@ function seedOrder(size: number): number[] {
 }
 
 export async function detail(clubId: string, tournamentId: string) {
-  const t = await prisma.tournament.findFirst({
-    where: { id: tournamentId, clubId, deletedAt: null },
-    include: {
-      participants: {
-        orderBy: { seed: "asc" },
-        include: { user: { select: { id: true, name: true, photoUrl: true } } }
-      },
-      matches: { orderBy: [{ round: "asc" }, { slot: "asc" }] }
-    }
-  });
+  const t = await tournaments().findOne({ id: tournamentId, clubId, deletedAt: null });
   if (!t) throw ApiError.notFound("Tournament not found");
+
+  const participants = await tournamentParticipants().aggregate([
+    { $match: { tournamentId } },
+    { $sort: { seed: 1 } },
+    {
+      $lookup: {
+        from: "users",
+        let: { uid: "$userId" },
+        pipeline: [
+          { $match: { $expr: { $eq: ["$id", "$$uid"] } } },
+          { $project: { id: 1, name: 1, photoUrl: 1, _id: 0 } }
+        ],
+        as: "user"
+      }
+    },
+    { $unwind: { path: "$user", preserveNullAndEmptyArrays: true } }
+  ]).toArray();
+
+  const tMatches = await tournamentMatches().find({ tournamentId }).sort({ round: 1, slot: 1 }).toArray();
+
   const userIds = new Set<string>();
-  t.matches.forEach((m) => {
-    if (m.playerAId) userIds.add(m.playerAId);
-    if (m.playerBId) userIds.add(m.playerBId);
+  tMatches.forEach((m) => {
+    if (m.playerAId) userIds.add(m.playerAId as string);
+    if (m.playerBId) userIds.add(m.playerBId as string);
   });
-  const users = await prisma.user.findMany({ where: { id: { in: [...userIds] } }, select: { id: true, name: true } });
-  const nameMap = Object.fromEntries(users.map((u) => [u.id, u.name]));
-  const totalRounds = Math.log2(t.size);
+  const usersList = await users().find({ id: { $in: [...userIds] } }, { projection: { id: 1, name: 1, _id: 0 } }).toArray();
+  const nameMap = Object.fromEntries(usersList.map((u) => [u.id, u.name]));
+  const totalRounds = Math.log2(t.size as number);
   const rounds: { round: number; matches: unknown[] }[] = [];
   for (let r = 1; r <= totalRounds; r++) {
     rounds.push({
       round: r,
-      matches: t.matches.filter((m) => m.round === r)
+      matches: tMatches.filter((m) => m.round === r)
     });
   }
   return {
     ...t,
+    participants,
+    matches: tMatches,
     rounds,
     totalRounds,
     names: nameMap

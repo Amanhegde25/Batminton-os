@@ -1,7 +1,9 @@
 export interface SessionUser {
   id: string;
-  email: string;
+  email: string | null;
   mobile: string | null;
+  aadhar?: string | null;
+  hasCompletedSetup?: boolean;
   name: string;
   photoUrl: string | null;
   role: string;

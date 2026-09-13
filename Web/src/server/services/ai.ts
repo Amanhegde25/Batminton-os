@@ -1,31 +1,29 @@
-import { prisma } from "@/server/db";
+import { aiInsights, videoAnalyses } from "@/server/db";
 import { ApiError } from "@/lib/api";
+import { cuid } from "@/lib/id";
 import { getStorage } from "@/server/providers/storage";
 import { getQueue } from "@/server/providers/queue";
 import { buildCoachingContext, getAIProvider, type CoachingPayload } from "@/server/providers/ai";
 import type { SessionUser } from "@/server/auth/types";
 
 export async function getCoaching(clubId: string, targetUserId: string): Promise<CoachingPayload & { provider: string; generatedAt: string; cached: boolean }> {
-  const cached = await prisma.aIInsight.findFirst({
-    where: {
-      clubId,
-      userId: targetUserId,
-      kind: "COACHING",
-      OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }]
-    },
-    orderBy: { createdAt: "desc" }
-  });
+  const cached = await aiInsights().findOne({
+    clubId,
+    userId: targetUserId,
+    kind: "COACHING",
+    $or: [{ expiresAt: null }, { expiresAt: { $gt: new Date() } }]
+  }, { sort: { createdAt: -1 } });
   if (cached) {
-    return { ...(JSON.parse(cached.payload) as CoachingPayload), provider: cached.provider, generatedAt: cached.createdAt.toISOString(), cached: true };
+    return { ...(JSON.parse(cached.payload as string) as CoachingPayload), provider: cached.provider as string, generatedAt: (cached.createdAt as Date).toISOString(), cached: true };
   }
   return generateAndStore(clubId, targetUserId);
 }
 
 export async function regenerateCoaching(clubId: string, targetUserId: string) {
-  await prisma.aIInsight.updateMany({
-    where: { clubId, userId: targetUserId, kind: "COACHING" },
-    data: { expiresAt: new Date() }
-  });
+  await aiInsights().updateMany(
+    { clubId, userId: targetUserId, kind: "COACHING" },
+    { $set: { expiresAt: new Date() } }
+  );
   return generateAndStore(clubId, targetUserId);
 }
 
@@ -33,15 +31,15 @@ async function generateAndStore(clubId: string, userId: string) {
   const ctx = await buildCoachingContext(clubId, userId);
   const provider = getAIProvider();
   const payload = await provider.coachingInsights(ctx);
-  await prisma.aIInsight.create({
-    data: {
-      clubId,
-      userId,
-      kind: "COACHING",
-      provider: provider.name,
-      payload: JSON.stringify(payload),
-      expiresAt: new Date(Date.now() + 12 * 3600 * 1000)
-    }
+  await aiInsights().insertOne({
+    id: cuid(),
+    clubId,
+    userId,
+    kind: "COACHING",
+    provider: provider.name,
+    payload: JSON.stringify(payload),
+    expiresAt: new Date(Date.now() + 12 * 3600 * 1000),
+    createdAt: new Date()
   });
   return { ...payload, provider: provider.name, generatedAt: new Date().toISOString(), cached: false };
 }
@@ -64,36 +62,38 @@ export async function uploadVideo(
   const storage = getStorage();
   const key = `videos/${clubId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
   await storage.put(key, file.buffer, file.mimetype);
-  const record = await prisma.videoAnalysis.create({
-    data: {
-      clubId,
-      userId: user.id,
-      storageKey: key,
-      originalName: file.originalname.slice(0, 120),
-      mimeType: file.mimetype,
-      sizeBytes: file.buffer.length,
-      status: "PENDING"
-    }
-  });
+  const record = {
+    id: cuid(),
+    clubId,
+    userId: user.id,
+    storageKey: key,
+    originalName: file.originalname.slice(0, 120),
+    mimeType: file.mimetype,
+    sizeBytes: file.buffer.length,
+    status: "PENDING",
+    createdAt: new Date(),
+    updatedAt: new Date()
+  };
+  await videoAnalyses().insertOne(record);
   getQueue().enqueue(`video-analysis:${record.id}`, () => processAnalysis(record.id));
   return record;
 }
 
 async function processAnalysis(id: string): Promise<void> {
   try {
-    const video = await prisma.videoAnalysis.findUnique({ where: { id } });
-    await prisma.videoAnalysis.update({ where: { id }, data: { status: "PROCESSING" } });
+    const video = await videoAnalyses().findOne({ id });
+    await videoAnalyses().updateOne({ id }, { $set: { status: "PROCESSING", updatedAt: new Date() } });
     await sleep(2500);
     // Seed using file fingerprint (filename + size) so identical videos yield identical, deterministic results
     const seedKey = video ? `${video.originalName}:${video.sizeBytes ?? 0}` : id;
     const result = mockCvResult(seedKey);
-    await prisma.videoAnalysis.update({
-      where: { id },
-      data: { status: "COMPLETED", result: JSON.stringify(result), completedAt: new Date() }
-    });
+    await videoAnalyses().updateOne(
+      { id },
+      { $set: { status: "COMPLETED", result: JSON.stringify(result), completedAt: new Date(), updatedAt: new Date() } }
+    );
   } catch (e) {
-    await prisma.videoAnalysis
-      .update({ where: { id }, data: { status: "FAILED", error: e instanceof Error ? e.message : "processing failed" } })
+    await videoAnalyses()
+      .updateOne({ id }, { $set: { status: "FAILED", error: e instanceof Error ? e.message : "processing failed", updatedAt: new Date() } })
       .catch(() => {});
   }
 }
@@ -158,19 +158,17 @@ function mockCvResult(id: string) {
 }
 
 export async function listVideos(clubId: string, user: SessionUser, staffView: boolean) {
-  return prisma.videoAnalysis.findMany({
-    where: { clubId, ...(staffView ? {} : { userId: user.id }) },
-    orderBy: { createdAt: "desc" },
-    take: 50
-  });
+  const query: Record<string, unknown> = { clubId };
+  if (!staffView) query.userId = user.id;
+  return videoAnalyses().find(query).sort({ createdAt: -1 }).limit(50).toArray();
 }
 
 export async function getVideo(clubId: string, id: string) {
-  const v = await prisma.videoAnalysis.findFirst({ where: { id, clubId } });
+  const v = await videoAnalyses().findOne({ id, clubId });
   if (!v) throw ApiError.notFound("Video not found");
   let result: unknown = null;
   try {
-    result = v.result ? JSON.parse(v.result) : null;
+    result = v.result ? JSON.parse(v.result as string) : null;
   } catch {}
   return { ...v, result };
 }

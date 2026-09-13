@@ -1,5 +1,6 @@
-import { prisma } from "@/server/db";
+import { notifications } from "@/server/db";
 import { NOTIFICATION_TYPES } from "@/lib/constants";
+import { cuid } from "@/lib/id";
 
 export interface NotifyInput {
   userId: string;
@@ -12,15 +13,16 @@ export interface NotifyInput {
 
 export async function notify(input: NotifyInput): Promise<void> {
   try {
-    await prisma.notification.create({
-      data: {
-        userId: input.userId,
-        clubId: input.clubId ?? null,
-        type: String(input.type),
-        title: input.title,
-        body: input.body,
-        data: input.data ? JSON.stringify(input.data) : null
-      }
+    await notifications().insertOne({
+      id: cuid(),
+      userId: input.userId,
+      clubId: input.clubId ?? null,
+      type: String(input.type),
+      title: input.title,
+      body: input.body ?? null,
+      data: input.data ? JSON.stringify(input.data) : null,
+      readAt: null,
+      createdAt: new Date()
     });
   } catch (e) {
     console.error("[notify] failed", e);
@@ -32,15 +34,11 @@ export async function notifyMany(inputs: NotifyInput[]): Promise<void> {
 }
 
 export async function listNotifications(userId: string, page = 1, pageSize = 30) {
+  const skip = (page - 1) * pageSize;
   const [items, total, unread] = await Promise.all([
-    prisma.notification.findMany({
-      where: { userId },
-      orderBy: { createdAt: "desc" },
-      skip: (page - 1) * pageSize,
-      take: pageSize
-    }),
-    prisma.notification.count({ where: { userId } }),
-    prisma.notification.count({ where: { userId, readAt: null } })
+    notifications().find({ userId }).sort({ createdAt: -1 }).skip(skip).limit(pageSize).toArray(),
+    notifications().countDocuments({ userId }),
+    notifications().countDocuments({ userId, readAt: null })
   ]);
   return {
     items: items.map(withParsedData),
@@ -52,21 +50,20 @@ export async function listNotifications(userId: string, page = 1, pageSize = 30)
 }
 
 export async function unreadCount(userId: string): Promise<number> {
-  return prisma.notification.count({ where: { userId, readAt: null } });
+  return notifications().countDocuments({ userId, readAt: null });
 }
 
 export async function markRead(userId: string, ids?: string[]): Promise<number> {
-  const res = await prisma.notification.updateMany({
-    where: { userId, readAt: null, ...(ids && ids.length ? { id: { in: ids } } : {}) },
-    data: { readAt: new Date() }
-  });
-  return res.count;
+  const filter: Record<string, unknown> = { userId, readAt: null };
+  if (ids && ids.length) filter.id = { $in: ids };
+  const res = await notifications().updateMany(filter, { $set: { readAt: new Date() } });
+  return res.modifiedCount;
 }
 
-function withParsedData(n: { data: string | null }) {
+function withParsedData(n: Record<string, unknown>) {
   let parsed: unknown = null;
   try {
-    parsed = n.data ? JSON.parse(n.data) : null;
+    parsed = n.data ? JSON.parse(n.data as string) : null;
   } catch {}
   return { ...n, data: parsed };
 }

@@ -27,7 +27,7 @@ function AuthShell({ title, subtitle, children }: { title: string; subtitle: str
 export function LoginForm() {
   const router = useRouter();
   const [mode, setMode] = useState<"password" | "otp">("password");
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [mobile, setMobile] = useState("");
   const [code, setCode] = useState("");
@@ -41,11 +41,26 @@ export function LoginForm() {
     setError(null);
     try {
       if (mode === "password") {
-        await api("/auth/login", { method: "POST", json: { email, password } });
+        const res = await api<{ user: any; token: string }>("/auth/login", {
+          method: "POST",
+          json: { identifier, password }
+        });
+        if (res.user && res.user.hasCompletedSetup === false) {
+          router.push("/setup");
+        } else {
+          router.push("/app");
+        }
       } else {
-        await api("/auth/otp/verify", { method: "POST", json: { mobile, code } });
+        const res = await api<{ user: any }>("/auth/otp/verify", {
+          method: "POST",
+          json: { mobile, code }
+        });
+        if (res.user && res.user.hasCompletedSetup === false) {
+          router.push("/setup");
+        } else {
+          router.push("/app");
+        }
       }
-      router.push("/app");
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
@@ -81,11 +96,25 @@ export function LoginForm() {
       <form onSubmit={submit} className="space-y-4">
         {mode === "password" ? (
           <>
-            <Field label="Email">
-              <Input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@club.com" />
+            <Field label="Email or Mobile number">
+              <Input
+                type="text"
+                required
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
+                placeholder="you@club.com or 9876543210"
+                autoComplete="username"
+              />
             </Field>
             <Field label="Password" error={error}>
-              <Input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" />
+              <Input
+                type="password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                autoComplete="current-password"
+              />
             </Field>
           </>
         ) : (
@@ -131,7 +160,7 @@ export function LoginForm() {
           </button>
         ) : (
           <button type="button" className="text-primary hover:underline" onClick={() => setMode("password")}>
-            Use email & password instead
+            Use email/mobile & password instead
           </button>
         )}
         <div>
@@ -172,17 +201,29 @@ export function LoginForm() {
 
 export function RegisterForm() {
   const router = useRouter();
-  const [form, setForm] = useState({ name: "", email: "", password: "", clubName: "" });
+  const [form, setForm] = useState({ name: "", email: "", mobile: "", password: "", clubName: "" });
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (!form.email.trim() && !form.mobile.trim()) {
+      setError("Please provide either an email address or a mobile number.");
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
-      await api("/auth/register", { method: "POST", json: form });
-      router.push("/app");
+      await api("/auth/register", {
+        method: "POST",
+        json: {
+          name: form.name,
+          email: form.email.trim() || undefined,
+          mobile: form.mobile.trim() || undefined,
+          password: form.password
+        }
+      });
+      router.push("/setup");
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Registration failed");
@@ -192,26 +233,38 @@ export function RegisterForm() {
   }
 
   return (
-    <AuthShell title="Create your account" subtitle="Register once — then create or join any number of clubs.">
+    <AuthShell title="Create your account" subtitle="Register with email or mobile — then complete your profile.">
       <form onSubmit={submit} className="space-y-4">
         <Field label="Full name">
           <Input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Ravi Kumar" />
         </Field>
-        <Field label="Email">
-          <Input type="email" required value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="you@club.com" />
+        <Field label="Email" hint="Optional if mobile number is provided">
+          <Input
+            type="email"
+            value={form.email}
+            onChange={(e) => setForm({ ...form, email: e.target.value })}
+            placeholder="you@club.com"
+          />
+        </Field>
+        <Field label="Mobile number" hint="Optional if email is provided">
+          <Input
+            type="tel"
+            value={form.mobile}
+            onChange={(e) => setForm({ ...form, mobile: e.target.value })}
+            placeholder="+91 98765 43210"
+          />
         </Field>
         <Field
           label="Password"
           hint="At least 8 characters with a letter and a number."
           error={error}
         >
-          <Input type="password" required value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
-        </Field>
-        <Field label="Club name (optional)" hint="Leave empty to join an existing club later.">
           <Input
-            value={form.clubName}
-            onChange={(e) => setForm({ ...form, clubName: e.target.value })}
-            placeholder="Smash Arena"
+            type="password"
+            required
+            value={form.password}
+            onChange={(e) => setForm({ ...form, password: e.target.value })}
+            placeholder="••••••••"
           />
         </Field>
         <Button type="submit" disabled={busy} className="w-full">

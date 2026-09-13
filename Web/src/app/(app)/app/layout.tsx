@@ -160,10 +160,16 @@ function Shell({ children }: { children: React.ReactNode }) {
   const [switcherOpen, setSwitcherOpen] = useState(false);
 
   useEffect(() => {
-    if (!loading && !me) router.replace("/login");
+    if (!loading) {
+      if (!me) {
+        router.replace("/login");
+      } else if (me.hasCompletedSetup === false) {
+        router.replace("/setup");
+      }
+    }
   }, [loading, me, router]);
 
-  if (loading || !me) {
+  if (loading || !me || me.hasCompletedSetup === false) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <Spinner className="h-8 w-8" />
@@ -231,7 +237,7 @@ function Shell({ children }: { children: React.ReactNode }) {
             <Avatar name={me.name} src={me.photoUrl} size={32} />
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium">{me.name}</p>
-              <p className="truncate text-[11px] text-muted-foreground">{me.email}</p>
+              <p className="truncate text-[11px] text-muted-foreground">{me.email || me.mobile || "—"}</p>
             </div>
           </div>
           <Button variant="ghost" size="sm" className="mt-1 w-full justify-start" onClick={logout}>

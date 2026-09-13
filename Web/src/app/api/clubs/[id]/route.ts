@@ -4,15 +4,13 @@ import { currentUser } from "@/server/auth/session";
 import { isStaffOf, requireStaff, requireUser } from "@/server/rbac";
 import { getClubForUser, updateClub } from "@/server/services/clubs";
 import { featuresFor } from "@/lib/constants";
-import { prisma } from "@/server/db";
+import { clubMembers } from "@/server/db";
 
 export const GET = handler(async (_req, { params }) => {
   const user = await requireUser(await currentUser());
   const { id } = await params;
   const club = await getClubForUser(id);
-  const membership = await prisma.clubMember.findUnique({
-    where: { clubId_userId: { clubId: id, userId: user.id } }
-  });
+  const membership = await clubMembers().findOne({ clubId: id, userId: user.id });
   return ok({
     id: club.id,
     name: club.name,
@@ -24,7 +22,7 @@ export const GET = handler(async (_req, { params }) => {
     ownerId: club.ownerId,
     owner: club.owner,
     subscriptionPlan: club.subscriptionPlan,
-    settings: JSON.parse(club.settings || "{}"),
+    settings: typeof club.settings === "string" ? JSON.parse(club.settings || "{}") : (club.settings || {}),
     features: featuresFor(club.subscriptionPlan),
     myMembership: membership && membership.status !== "REMOVED"
       ? { id: membership.id, role: membership.role, status: membership.status }

@@ -14,8 +14,10 @@ export interface MeClub {
 
 export interface Me {
   id: string;
-  email: string;
+  email: string | null;
   mobile: string | null;
+  aadhar?: string | null;
+  hasCompletedSetup?: boolean;
   name: string;
   photoUrl: string | null;
   role: string;

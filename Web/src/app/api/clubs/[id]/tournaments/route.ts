@@ -3,6 +3,7 @@ import { z } from "zod";
 import { currentUser } from "@/server/auth/session";
 import { getClubContext, requireStaff, requireUser } from "@/server/rbac";
 import { createTournament, listTournaments, registerParticipant, startTournament, submitScore } from "@/server/services/tournaments";
+import { tournaments } from "@/server/db";
 
 export const GET = handler(async (_req, { params }) => {
   const user = await requireUser(await currentUser());
@@ -37,9 +38,8 @@ export const POST = handler(async (req, { params }) => {
 async function resolveClubId(id: string, tournamentId?: string): Promise<string> {
   if (id && id !== "_" && id !== "undefined") return id;
   if (tournamentId) {
-    const { prisma } = await import("@/server/db");
-    const t = await prisma.tournament.findUnique({ where: { id: tournamentId } });
-    if (t) return t.clubId;
+    const t = await tournaments().findOne({ id: tournamentId });
+    if (t) return t.clubId as string;
   }
   return id;
 }

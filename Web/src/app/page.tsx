@@ -97,7 +97,7 @@ export default function LandingPage() {
 
       <footer className="container-page flex flex-col items-center justify-between gap-2 border-t py-8 text-sm text-muted-foreground sm:flex-row">
         <span>© {new Date().getFullYear()} Badminton Club OS</span>
-        <span>Built with Next.js, Prisma & SQLite</span>
+        <span>Built with Next.js & MongoDB</span>
       </footer>
     </main>
   );

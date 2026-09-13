@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useSession } from "@/components/session";
 import { api } from "@/lib/client";
-import { Badge, Button, Card, Field, Input, Select, Spinner } from "@/components/ui";
+import { Avatar, Badge, Button, Card, Field, Input, Select, Spinner } from "@/components/ui";
 import { Table, Tabs, Td, useToast } from "@/components/ui";
 
 interface ClubSettings {
@@ -22,16 +22,35 @@ interface ClubSettings {
   matchmaking?: { allowAbsent: boolean };
 }
 
+function formatAadhar(val: string): string {
+  const digits = val.replace(/\D/g, "").slice(0, 12);
+  const parts = [];
+  for (let i = 0; i < digits.length; i += 4) {
+    parts.push(digits.slice(i, i + 4));
+  }
+  return parts.join(" ");
+}
+
 function SettingsInner() {
   const { me, activeClubId, activeMembership, refresh } = useSession();
   const [tab, setTab] = useState("profile");
   const [settings, setSettings] = useState<ClubSettings | null>(null);
   const [audit, setAudit] = useState<{ id: string; action: string; actor?: { name: string; email: string } | null; createdAt: string }[]>([]);
   const [savingSettings, setSavingSettings] = useState(false);
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [aadhar, setAadhar] = useState("");
+  const [initializedAadhar, setInitializedAadhar] = useState(false);
   const [pw, setPw] = useState({ current: "", next: "", confirm: "" });
   const { toast, node } = useToast();
 
   const isStaff = ["OWNER", "ADMIN"].includes(activeMembership?.role ?? "");
+
+  useEffect(() => {
+    if (me?.aadhar && !initializedAadhar) {
+      setAadhar(formatAadhar(me.aadhar));
+      setInitializedAadhar(true);
+    }
+  }, [me?.aadhar, initializedAadhar]);
 
   const loadClub = useCallback(async () => {
     if (!activeClubId || !isStaff) return;
@@ -53,13 +72,30 @@ function SettingsInner() {
 
   async function saveProfile(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    setSavingProfile(true);
     const f = new FormData(e.currentTarget);
+    const rawAadhar = aadhar.replace(/\D/g, "");
+    if (rawAadhar && rawAadhar.length !== 12) {
+      setSavingProfile(false);
+      return toast("Aadhaar number must be exactly 12 digits", "error");
+    }
+
+    const emailVal = (f.get("email") as string)?.trim() || "";
+    const mobileVal = (f.get("mobile") as string)?.trim() || "";
+
+    if (!emailVal && !mobileVal) {
+      setSavingProfile(false);
+      return toast("You must keep at least one contact method (email or mobile number)", "error");
+    }
+
     try {
       await api("/users/me", {
         method: "PATCH",
         json: {
           name: f.get("name"),
-          mobile: f.get("mobile") || null,
+          email: emailVal ? emailVal : null,
+          mobile: mobileVal ? mobileVal : null,
+          aadhar: rawAadhar ? rawAadhar : null,
           gender: f.get("gender") || undefined,
           skillLevel: f.get("skillLevel") || undefined,
           playingStyle: f.get("playingStyle") || undefined,
@@ -68,9 +104,11 @@ function SettingsInner() {
         }
       });
       await refresh();
-      toast("Profile saved");
+      toast("Profile saved successfully");
     } catch (err) {
       toast(err instanceof Error ? err.message : "Save failed", "error");
+    } finally {
+      setSavingProfile(false);
     }
   }
 
@@ -118,55 +156,148 @@ function SettingsInner() {
       />
 
       {tab === "profile" && me && (
-        <form onSubmit={saveProfile} className="grid max-w-2xl gap-4 rounded-xl border bg-card p-5 sm:grid-cols-2">
-          <Field label="Full name">
-            <Input name="name" defaultValue={me.name} required />
-          </Field>
-          <Field label="Mobile">
-            <Input name="mobile" defaultValue={me.mobile ?? ""} placeholder="+91…" />
-          </Field>
-          <Field label="Gender">
-            <Select name="gender" defaultValue={me.gender ?? ""}>
-              <option value="">—</option>
-              <option value="MALE">Male</option>
-              <option value="FEMALE">Female</option>
-              <option value="OTHER">Other</option>
-            </Select>
-          </Field>
-          <Field label="Skill level">
-            <Select name="skillLevel" defaultValue={me.skillLevel ?? ""}>
-              <option value="">—</option>
-              {["BEGINNER", "INTERMEDIATE", "ADVANCED", "PRO"].map((s) => (
-                <option key={s}>{s}</option>
-              ))}
-            </Select>
-          </Field>
-          <Field label="Playing style">
-            <Select name="playingStyle" defaultValue={me.playingStyle ?? ""}>
-              <option value="">—</option>
-              {["ATTACKING", "DEFENSIVE", "ALL_ROUNDER"].map((s) => (
-                <option key={s}>{s.replace("_", "-")}</option>
-              ))}
-            </Select>
-          </Field>
-          <Field label="Dominant hand">
-            <Select name="dominantHand" defaultValue={me.dominantHand ?? ""}>
-              <option value="">—</option>
-              <option value="RIGHT">Right</option>
-              <option value="LEFT">Left</option>
-            </Select>
-          </Field>
-          <Field label="Preferred time">
-            <Select name="preferredTime" defaultValue={me.preferredTime ?? ""}>
-              <option value="">—</option>
-              <option value="MORNING">Morning</option>
-              <option value="EVENING">Evening</option>
-            </Select>
-          </Field>
-          <div className="flex items-end">
-            <Button type="submit">Save profile</Button>
-          </div>
-        </form>
+        <div className="max-w-2xl space-y-6">
+          <Card className="flex items-center gap-4 p-5">
+            <Avatar name={me.name} src={me.photoUrl} size={56} />
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg font-bold truncate">{me.name}</h2>
+                <Badge tone="accent">{me.role}</Badge>
+              </div>
+              <p className="text-sm text-muted-foreground truncate">
+                {me.email || me.mobile || "No contact info linked"}
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2 text-xs">
+                {me.email ? (
+                  <Badge tone="primary">Email linked</Badge>
+                ) : (
+                  <Badge tone="muted">No email</Badge>
+                )}
+                {me.mobile ? (
+                  <Badge tone="primary">Mobile linked</Badge>
+                ) : (
+                  <Badge tone="muted">No mobile</Badge>
+                )}
+                {me.aadhar ? (
+                  <Badge tone="success">Aadhaar verified</Badge>
+                ) : (
+                  <Badge tone="muted">Aadhaar not set</Badge>
+                )}
+              </div>
+            </div>
+          </Card>
+
+          <form onSubmit={saveProfile} className="space-y-6 rounded-xl border bg-card p-5 sm:p-6">
+            <div>
+              <h3 className="text-base font-semibold">Account & Contact Details</h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                You only need either an email or mobile number linked. If email is linked, you can remove your phone number, and vice versa. Aadhaar is completely optional.
+              </p>
+              <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                <Field label="Full name">
+                  <Input name="name" defaultValue={me.name} required />
+                </Field>
+
+                <Field
+                  label="Email address"
+                  hint={me.email ? "Linked. You can remove your phone number if you keep this email." : "Optional if mobile number is provided."}
+                >
+                  <Input
+                    name="email"
+                    type="email"
+                    defaultValue={me.email ?? ""}
+                    placeholder="you@club.com"
+                  />
+                </Field>
+
+                <Field
+                  label="Mobile number"
+                  hint={me.mobile ? "Linked. You can remove your email if you keep this phone number." : "Optional if email address is provided."}
+                >
+                  <Input
+                    name="mobile"
+                    type="tel"
+                    defaultValue={me.mobile ?? ""}
+                    placeholder="+91 98765 43210"
+                  />
+                </Field>
+
+                <Field
+                  label="Aadhaar number (Optional)"
+                  hint="Not required. Stored securely if provided for tournament identity."
+                >
+                  <Input
+                    name="aadhar"
+                    value={aadhar}
+                    onChange={(e) => setAadhar(formatAadhar(e.target.value))}
+                    placeholder="XXXX XXXX XXXX"
+                    maxLength={14}
+                    inputMode="numeric"
+                  />
+                </Field>
+              </div>
+            </div>
+
+            <hr className="border-border" />
+
+            <div>
+              <h3 className="text-base font-semibold">Player & Badminton Preferences</h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Helps AI matchmaking and club managers schedule fair games for you.
+              </p>
+              <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                <Field label="Gender">
+                  <Select name="gender" defaultValue={me.gender ?? ""}>
+                    <option value="">—</option>
+                    <option value="MALE">Male</option>
+                    <option value="FEMALE">Female</option>
+                    <option value="OTHER">Other</option>
+                  </Select>
+                </Field>
+
+                <Field label="Skill level">
+                  <Select name="skillLevel" defaultValue={me.skillLevel ?? ""}>
+                    <option value="">—</option>
+                    {["BEGINNER", "INTERMEDIATE", "ADVANCED", "PRO"].map((s) => (
+                      <option key={s}>{s}</option>
+                    ))}
+                  </Select>
+                </Field>
+
+                <Field label="Playing style">
+                  <Select name="playingStyle" defaultValue={me.playingStyle ?? ""}>
+                    <option value="">—</option>
+                    {["ATTACKING", "DEFENSIVE", "ALL_ROUNDER"].map((s) => (
+                      <option key={s}>{s.replace("_", "-")}</option>
+                    ))}
+                  </Select>
+                </Field>
+
+                <Field label="Dominant hand">
+                  <Select name="dominantHand" defaultValue={me.dominantHand ?? ""}>
+                    <option value="">—</option>
+                    <option value="RIGHT">Right</option>
+                    <option value="LEFT">Left</option>
+                  </Select>
+                </Field>
+
+                <Field label="Preferred time">
+                  <Select name="preferredTime" defaultValue={me.preferredTime ?? ""}>
+                    <option value="">—</option>
+                    <option value="MORNING">Morning</option>
+                    <option value="EVENING">Evening</option>
+                  </Select>
+                </Field>
+              </div>
+            </div>
+
+            <div className="pt-2 flex justify-end">
+              <Button type="submit" disabled={savingProfile}>
+                {savingProfile ? "Saving…" : "Save changes"}
+              </Button>
+            </div>
+          </form>
+        </div>
       )}
 
       {tab === "security" && (

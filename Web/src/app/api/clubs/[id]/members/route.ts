@@ -1,8 +1,9 @@
-import { handler, ok, parseBody } from "@/lib/api";
+import { handler, ok, parseBody, ApiError } from "@/lib/api";
 import { z } from "zod";
 import { currentUser } from "@/server/auth/session";
 import { requireManagerOrCoach, requireStaff, requireUser } from "@/server/rbac";
 import { addMember, approveMembership, changeRole, listMembers } from "@/server/services/members";
+import { clubMembers } from "@/server/db";
 
 export const GET = handler(async (req, { params }) => {
   const user = await requireUser(await currentUser());
@@ -32,11 +33,10 @@ export const POST = handler(async (req, { params }) => {
     const body = await parseBody(req, z.object({ memberId: z.string(), action: z.string().optional() }));
     let resolvedMemberId = body.memberId;
     // Fallback: if memberId is actually a userId, look up the pending membership
-    const { prisma } = await import("@/server/db");
-    const direct = await prisma.clubMember.findFirst({ where: { id: resolvedMemberId, clubId: id } });
+    const direct = await clubMembers().findOne({ id: resolvedMemberId, clubId: id });
     if (!direct) {
-      const byUser = await prisma.clubMember.findFirst({ where: { userId: resolvedMemberId, clubId: id, status: "PENDING" } });
-      if (byUser) resolvedMemberId = byUser.id;
+      const byUser = await clubMembers().findOne({ userId: resolvedMemberId, clubId: id, status: "PENDING" });
+      if (byUser) resolvedMemberId = byUser.id as string;
     }
     return ok(await approveMembership(id, user, resolvedMemberId, action === "approve"));
   }
@@ -64,14 +64,10 @@ export const PATCH = handler(async (req, { params }) => {
   const input = await parseBody(req, patchSchema);
   let targetMemberId = input.memberId;
   if (!targetMemberId && input.userId) {
-    const { prisma } = await import("@/server/db");
-    const mem = await prisma.clubMember.findUnique({
-      where: { clubId_userId: { clubId: id, userId: input.userId } }
-    });
-    if (mem) targetMemberId = mem.id;
+    const mem = await clubMembers().findOne({ clubId: id, userId: input.userId });
+    if (mem) targetMemberId = mem.id as string;
   }
   if (!targetMemberId) {
-    const { ApiError } = await import("@/lib/api");
     throw ApiError.notFound("Member not found");
   }
   return ok(await changeRole(id, user, targetMemberId, input.role));

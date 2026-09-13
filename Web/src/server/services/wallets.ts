@@ -1,8 +1,9 @@
-import { prisma, type Tx } from "@/server/db";
+import { wallets, walletTransactions, users } from "@/server/db";
 import { ApiError } from "@/lib/api";
 import { AUDIT_ACTIONS } from "@/lib/constants";
 import { audit } from "./audit";
 import { notify } from "./notifications";
+import { cuid } from "@/lib/id";
 
 export interface PostTxnInput {
   clubId: string;
@@ -16,76 +17,88 @@ export interface PostTxnInput {
   reversesId?: string | null;
 }
 
-export async function ensureWallet(db: Tx, clubId: string, userId: string) {
-  return db.wallet.upsert({
-    where: { clubId_userId: { clubId, userId } },
-    create: { clubId, userId },
-    update: {}
-  });
+/** Tx type — not used for actual MongoDB transactions, kept for API compat */
+export type Tx = { wallets: typeof wallets; walletTransactions: typeof walletTransactions };
+
+const txProxy: Tx = { wallets, walletTransactions };
+
+export async function ensureWallet(_db: unknown, clubId: string, userId: string) {
+  const existing = await wallets().findOne({ clubId, userId });
+  if (existing) return existing;
+  const wallet = {
+    id: cuid(),
+    clubId,
+    userId,
+    balance: 0,
+    totalCredited: 0,
+    totalDebited: 0,
+    createdAt: new Date(),
+    updatedAt: new Date()
+  };
+  await wallets().insertOne(wallet);
+  return wallet;
 }
 
-export async function postTransaction(db: Tx, input: PostTxnInput) {
+export async function postTransaction(_db: unknown, input: PostTxnInput) {
   if (!Number.isInteger(input.amount) || input.amount === 0) {
     throw ApiError.badRequest("Transaction amount must be a non-zero integer (₹)");
   }
-  const wallet = await ensureWallet(db, input.clubId, input.userId);
-  const balanceAfter = wallet.balance + input.amount;
-  await db.wallet.update({
-    where: { id: wallet.id },
-    data: {
-      balance: balanceAfter,
-      totalCredited: input.amount > 0 ? { increment: input.amount } : { increment: 0 },
-      totalDebited: input.amount < 0 ? { increment: Math.abs(input.amount) } : { increment: 0 }
-    }
-  });
-  const txn = await db.walletTransaction.create({
-    data: {
-      clubId: input.clubId,
-      walletId: wallet.id,
-      userId: input.userId,
-      amount: input.amount,
-      balanceAfter,
-      type: input.type,
-      status: "COMPLETED",
-      description: input.description ?? null,
-      relatedType: input.relatedType ?? null,
-      relatedId: input.relatedId ?? null,
-      reversesId: input.reversesId ?? null,
-      createdById: input.createdById ?? null
-    }
-  });
+  const wallet = await ensureWallet(null, input.clubId, input.userId);
+  const balanceAfter = (wallet.balance as number) + input.amount;
+  const incData: Record<string, number> = { balance: input.amount };
+  if (input.amount > 0) incData.totalCredited = input.amount;
+  if (input.amount < 0) incData.totalDebited = Math.abs(input.amount);
+  await wallets().updateOne(
+    { id: wallet.id },
+    { $inc: incData, $set: { updatedAt: new Date() } }
+  );
+  const txn = {
+    id: cuid(),
+    clubId: input.clubId,
+    walletId: wallet.id as string,
+    userId: input.userId,
+    amount: input.amount,
+    balanceAfter,
+    type: input.type,
+    status: "COMPLETED",
+    description: input.description ?? null,
+    relatedType: input.relatedType ?? null,
+    relatedId: input.relatedId ?? null,
+    reversesId: input.reversesId ?? null,
+    reversedById: null,
+    createdById: input.createdById ?? null,
+    createdAt: new Date()
+  };
+  await walletTransactions().insertOne(txn);
   return txn;
 }
 
 export async function getMyWallet(clubId: string, userId: string) {
-  const wallet = await prisma.wallet.findUnique({
-    where: { clubId_userId: { clubId, userId } },
-    include: { transactions: { orderBy: { createdAt: "desc" }, take: 10 } }
-  });
+  const wallet = await wallets().findOne({ clubId, userId });
+  const recentTxns = wallet
+    ? await walletTransactions().find({ walletId: wallet.id }).sort({ createdAt: -1 }).limit(10).toArray()
+    : [];
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const agg = await prisma.walletTransaction.aggregate({
-    where: { clubId, userId, createdAt: { gte: monthStart } },
-    _sum: { amount: true }
-  });
-  const creditsAgg = await prisma.walletTransaction.aggregate({
-    where: { clubId, userId, createdAt: { gte: monthStart }, amount: { gt: 0 } },
-    _sum: { amount: true }
-  });
-  const debitsAgg = await prisma.walletTransaction.aggregate({
-    where: { clubId, userId, createdAt: { gte: monthStart }, amount: { lt: 0 } },
-    _sum: { amount: true }
-  });
-  const balance = wallet?.balance ?? 0;
+  const aggPipeline = (extraMatch: Record<string, unknown> = {}) => [
+    { $match: { clubId, userId, createdAt: { $gte: monthStart }, ...extraMatch } },
+    { $group: { _id: null, total: { $sum: "$amount" } } }
+  ];
+  const [aggResult, creditsResult, debitsResult] = await Promise.all([
+    walletTransactions().aggregate(aggPipeline()).toArray(),
+    walletTransactions().aggregate(aggPipeline({ amount: { $gt: 0 } })).toArray(),
+    walletTransactions().aggregate(aggPipeline({ amount: { $lt: 0 } })).toArray()
+  ]);
+  const balance = (wallet?.balance as number) ?? 0;
   return {
     wallet: wallet
       ? { id: wallet.id, balance: wallet.balance, totalCredited: wallet.totalCredited, totalDebited: wallet.totalDebited }
       : null,
     pendingDues: Math.max(0, -balance),
-    monthCredit: creditsAgg._sum.amount ?? 0,
-    monthDebit: Math.abs(debitsAgg._sum.amount ?? 0),
-    monthNet: agg._sum.amount ?? 0,
-    recentTransactions: wallet?.transactions ?? []
+    monthCredit: creditsResult[0]?.total ?? 0,
+    monthDebit: Math.abs(debitsResult[0]?.total ?? 0),
+    monthNet: aggResult[0]?.total ?? 0,
+    recentTransactions: recentTxns
   };
 }
 
@@ -95,33 +108,55 @@ export async function listClubTransactions(
 ) {
   const page = Math.max(1, opts.page ?? 1);
   const pageSize = Math.min(100, Math.max(5, opts.pageSize ?? 25));
-  const where = {
-    clubId,
-    ...(opts.userId ? { userId: opts.userId } : {}),
-    ...(opts.type ? { type: opts.type } : {})
-  };
+  const filter: Record<string, unknown> = { clubId };
+  if (opts.userId) filter.userId = opts.userId;
+  if (opts.type) filter.type = opts.type;
+  const skip = (page - 1) * pageSize;
+
   const [items, total] = await Promise.all([
-    prisma.walletTransaction.findMany({
-      where,
-      orderBy: { createdAt: "desc" },
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-      include: { user: { select: { id: true, name: true, photoUrl: true } } }
-    }),
-    prisma.walletTransaction.count({ where })
+    walletTransactions().aggregate([
+      { $match: filter },
+      { $sort: { createdAt: -1 } },
+      { $skip: skip },
+      { $limit: pageSize },
+      {
+        $lookup: {
+          from: "users",
+          let: { uid: "$userId" },
+          pipeline: [
+            { $match: { $expr: { $eq: ["$id", "$$uid"] } } },
+            { $project: { id: 1, name: 1, photoUrl: 1, _id: 0 } }
+          ],
+          as: "user"
+        }
+      },
+      { $unwind: { path: "$user", preserveNullAndEmptyArrays: true } }
+    ]).toArray(),
+    walletTransactions().countDocuments(filter)
   ]);
   return { items, total, page, pageSize };
 }
 
 export async function clubBalances(clubId: string) {
-  const wallets = await prisma.wallet.findMany({
-    where: { clubId },
-    include: { user: { select: { id: true, name: true, photoUrl: true } } },
-    orderBy: { balance: "desc" }
-  });
-  const totalDue = wallets.reduce((s, w) => s + Math.max(0, -w.balance), 0);
-  const debtors = wallets.filter((w) => w.balance < 0).length;
-  return { members: wallets, totals: { outstanding: totalDue, membersInDues: debtors } };
+  const walletList = await wallets().aggregate([
+    { $match: { clubId } },
+    { $sort: { balance: -1 } },
+    {
+      $lookup: {
+        from: "users",
+        let: { uid: "$userId" },
+        pipeline: [
+          { $match: { $expr: { $eq: ["$id", "$$uid"] } } },
+          { $project: { id: 1, name: 1, photoUrl: 1, _id: 0 } }
+        ],
+        as: "user"
+      }
+    },
+    { $unwind: { path: "$user", preserveNullAndEmptyArrays: true } }
+  ]).toArray();
+  const totalDue = walletList.reduce((s, w) => s + Math.max(0, -(w.balance as number)), 0);
+  const debtors = walletList.filter((w) => (w.balance as number) < 0).length;
+  return { members: walletList, totals: { outstanding: totalDue, membersInDues: debtors } };
 }
 
 export async function manualAdjust(
@@ -129,16 +164,14 @@ export async function manualAdjust(
   actor: SessionLike,
   input: { userId: string; amount: number; type: string; description: string }
 ) {
-  const txn = await prisma.$transaction((tx) =>
-    postTransaction(tx, {
-      clubId,
-      userId: input.userId,
-      amount: input.amount,
-      type: input.type,
-      description: input.description,
-      createdById: actor.id
-    })
-  );
+  const txn = await postTransaction(null, {
+    clubId,
+    userId: input.userId,
+    amount: input.amount,
+    type: input.type,
+    description: input.description,
+    createdById: actor.id
+  });
   await audit({
     clubId,
     actorUserId: actor.id,
@@ -159,44 +192,43 @@ export async function manualAdjust(
 }
 
 export async function refundTransaction(clubId: string, actor: SessionLike, transactionId: string, reason?: string) {
-  const original = await prisma.walletTransaction.findFirst({ where: { id: transactionId, clubId } });
+  const original = await walletTransactions().findOne({ id: transactionId, clubId });
   if (!original) throw ApiError.notFound("Transaction not found");
   if (original.status === "REVERSED") throw ApiError.conflict("Transaction already reversed");
-  const reversal = await prisma.$transaction(async (tx) => {
-    const rev = await postTransaction(tx, {
-      clubId,
-      userId: original.userId,
-      amount: -original.amount,
-      type: "REFUND",
-      description: reason || `Reversal of ${original.type}`,
-      createdById: actor.id,
-      relatedType: "WalletTransaction",
-      relatedId: original.id,
-      reversesId: original.id
-    });
-    await tx.walletTransaction.update({
-      where: { id: original.id },
-      data: { status: "REVERSED", reversedById: rev.id }
-    });
-    return rev;
-    }, { timeout: 20000, maxWait: 10000 });
+
+  const rev = await postTransaction(null, {
+    clubId,
+    userId: original.userId as string,
+    amount: -(original.amount as number),
+    type: "REFUND",
+    description: reason || `Reversal of ${original.type}`,
+    createdById: actor.id,
+    relatedType: "WalletTransaction",
+    relatedId: original.id as string,
+    reversesId: original.id as string
+  });
+  await walletTransactions().updateOne(
+    { id: original.id },
+    { $set: { status: "REVERSED", reversedById: rev.id } }
+  );
+
   await audit({
     clubId,
     actorUserId: actor.id,
     action: AUDIT_ACTIONS.WALLET_REFUND,
     entityType: "WalletTransaction",
-    entityId: reversal.id,
+    entityId: rev.id,
     previousValue: { transactionId: original.id, amount: original.amount },
-    newValue: { reversalId: reversal.id, amount: reversal.amount }
+    newValue: { reversalId: rev.id, amount: rev.amount }
   });
   await notify({
-    userId: original.userId,
+    userId: original.userId as string,
     clubId,
     type: "WALLET_ADJUSTED",
     title: "Refund processed",
-    body: `₹${Math.abs(original.amount)} refunded — ${reason || original.description || original.type}`
+    body: `₹${Math.abs(original.amount as number)} refunded — ${reason || original.description || original.type}`
   });
-  return reversal;
+  return rev;
 }
 
 interface SessionLike {

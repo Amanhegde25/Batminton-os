@@ -1,7 +1,7 @@
 import { ApiError } from "@/lib/api";
 import type { SessionUser } from "./auth/types";
 import { MANAGER_ROLES, STAFF_ROLES, planAllows, PLAN_LIMITS, type Plan, type Feature } from "@/lib/constants";
-import { prisma } from "@/server/db";
+import { clubs, clubMembers } from "@/server/db";
 
 export interface ClubContext {
   clubId: string;
@@ -22,17 +22,26 @@ export async function requireSuperAdmin(user: SessionUser | null): Promise<Sessi
 }
 
 export async function getClubContext(clubId: string, user: SessionUser): Promise<ClubContext> {
-  const club = await prisma.club.findFirst({ where: { id: clubId, deletedAt: null } });
+  const club = await clubs().findOne({ id: clubId, deletedAt: null });
   if (!club) throw ApiError.notFound("Club not found");
-  const membership = await prisma.clubMember.findUnique({
-    where: { clubId_userId: { clubId, userId: user.id } }
-  });
+  const membership = await clubMembers().findOne({ clubId, userId: user.id });
   const active =
     membership && membership.status === "ACTIVE" && !membership.removedAt
-      ? { id: membership.id, role: membership.role, status: membership.status, userId: membership.userId }
+      ? { id: membership.id as string, role: membership.role as string, status: membership.status as string, userId: membership.userId as string }
       : null;
   if (!active && user.role !== "SUPER_ADMIN") throw ApiError.forbidden("You are not a member of this club", "NOT_A_MEMBER");
-  return { clubId, club, membership: active, user };
+  return {
+    clubId,
+    club: {
+      id: club.id as string,
+      name: club.name as string,
+      subscriptionPlan: club.subscriptionPlan as string,
+      settings: club.settings as string,
+      ownerId: club.ownerId as string
+    },
+    membership: active,
+    user
+  };
 }
 
 export async function requireClubRole(
@@ -60,7 +69,7 @@ export async function requireManagerOrCoach(clubId: string, user: SessionUser): 
 }
 
 export async function isStaffOf(clubId: string, user: SessionUser): Promise<boolean> {
-  const m = await prisma.clubMember.findUnique({ where: { clubId_userId: { clubId, userId: user.id } } });
+  const m = await clubMembers().findOne({ clubId, userId: user.id });
   return Boolean(m && m.status === "ACTIVE" && MANAGER_ROLES.includes(m.role as any));
 }
 
@@ -77,7 +86,7 @@ export async function assertLimit(
   const plan = (club.subscriptionPlan as Plan) ?? "FREE";
   if (!PLAN_LIMITS[plan]) return;
   if (kind === "members") {
-    const count = await prisma.clubMember.count({ where: { clubId: club.id, status: "ACTIVE" } }).catch(() => 0);
+    const count = await clubMembers().countDocuments({ clubId: club.id, status: "ACTIVE" }).catch(() => 0);
     if (count >= PLAN_LIMITS[plan].maxMembers) {
       throw ApiError.paymentRequired(`Member limit reached for ${plan} plan`, "PLAN_LIMIT");
     }
