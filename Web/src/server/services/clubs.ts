@@ -27,6 +27,7 @@ export async function createClub(user: SessionUser, input: CreateClubInput) {
   const slug = input.slug ? await uniqueSlug(input.slug) : await uniqueSlug(input.name);
   const now = new Date();
   const clubId = cuid();
+  const targetOwnerId = input.ownerId || user.id;
   const club = {
     id: clubId,
     name: input.name.trim(),
@@ -37,7 +38,7 @@ export async function createClub(user: SessionUser, input: CreateClubInput) {
     logoUrl: input.logoUrl ?? null,
     lat: input.lat ?? null,
     lng: input.lng ?? null,
-    ownerId: user.id,
+    ownerId: targetOwnerId,
     subscriptionPlan: "FREE",
     settings: JSON.stringify(parseClubSettings(null)),
     sport: "BADMINTON",
@@ -52,7 +53,7 @@ export async function createClub(user: SessionUser, input: CreateClubInput) {
   await clubMembers().insertOne({
     id: cuid(),
     clubId,
-    userId: user.id,
+    userId: targetOwnerId,
     role: "OWNER",
     status: "ACTIVE",
     joinedAt: now,
@@ -80,7 +81,7 @@ export async function createClub(user: SessionUser, input: CreateClubInput) {
     action: "club.created",
     entityType: "Club",
     entityId: clubId,
-    newValue: { name: club.name }
+    newValue: { name: club.name, ownerId: targetOwnerId }
   });
   return club;
 }
@@ -94,6 +95,7 @@ export interface CreateClubInput {
   slug?: string;
   lat?: number;
   lng?: number;
+  ownerId?: string;
 }
 
 export async function updateClub(clubId: string, user: SessionUser, patch: UpdateClubPatch) {
@@ -152,6 +154,9 @@ function mergeSettings(base: ClubSettings, patch: DeepPartial<ClubSettings>): Cl
   return {
     ...base,
     ...patch,
+    openingTime: patch.openingTime ?? base.openingTime ?? "06:00",
+    closingTime: patch.closingTime ?? base.closingTime ?? "22:00",
+    scheduleNotes: patch.scheduleNotes ?? base.scheduleNotes ?? "Open daily: 6:00 AM – 10:00 PM",
     attendance: { ...base.attendance, ...(patch.attendance ?? {}) },
     booking: { ...base.booking, ...(patch.booking ?? {}) },
     membership: { ...base.membership, ...(patch.membership ?? {}) },
@@ -241,6 +246,7 @@ export async function listPublicClubs(q?: string, userId?: string, options?: Lis
     if (options?.lat != null && options?.lng != null && c.lat != null && c.lng != null) {
       distanceKm = haversineKm(options.lat, options.lng, c.lat as number, c.lng as number);
     }
+    const st = parseClubSettings(c.settings as string);
     return {
       id: c.id as string,
       name: c.name as string,
@@ -253,6 +259,9 @@ export async function listPublicClubs(q?: string, userId?: string, options?: Lis
       description: (c.description as string) ?? null,
       subscriptionPlan: c.subscriptionPlan as string,
       sport: c.sport as string,
+      openingTime: st.openingTime ?? "06:00",
+      closingTime: st.closingTime ?? "22:00",
+      scheduleNotes: st.scheduleNotes ?? null,
       courtCount: courtCountMap.get(c.id) ?? 0,
       memberCount: memberCountMap.get(c.id) ?? 0,
       distanceKm,

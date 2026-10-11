@@ -60,7 +60,9 @@ export {
   MessageSquare,
   ExternalLink,
   RotateCcw,
-  ArrowLeftRight
+  ArrowLeftRight,
+  FileText,
+  Trash2 as Trash
 } from "lucide-react";
 
 export function ShuttlecockIcon({

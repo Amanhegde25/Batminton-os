@@ -113,5 +113,6 @@ Plans are enforced server-side (`assertFeature`) on every gated route; the `/adm
 
 ## 📖 Documentation
 
-- [`Web/docs/API.md`](Web/docs/API.md) — REST API endpoints with authentication & permission specifications.
-- [`Web/docs/ARCHITECTURE.md`](Web/docs/ARCHITECTURE.md) — System architecture, database schema, rating math, and security model.
+- [`docs/API.md`](docs/API.md) — REST API endpoints with authentication & permission specifications.
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — System architecture, database schema, rating math, and security model.
+- [`docs/DESIGN.md`](docs/DESIGN.md) — Tactical design system, color palette, typography, and component styling rules.

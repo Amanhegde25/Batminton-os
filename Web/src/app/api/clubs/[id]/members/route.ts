@@ -60,7 +60,7 @@ const patchSchema = z
 export const PATCH = handler(async (req, { params }) => {
   const user = await requireUser(await currentUser());
   const { id } = await params;
-  await requireManagerOrCoach(id, user);
+  await requireStaff(id, user);
   const input = await parseBody(req, patchSchema);
   let targetMemberId = input.memberId;
   if (!targetMemberId && input.userId) {

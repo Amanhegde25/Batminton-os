@@ -7,7 +7,8 @@ import {
   createGroupSession,
   rsvpSession,
   listGroups,
-  getGroup
+  getGroup,
+  updateGroupMember
 } from "../src/server/services/groups";
 
 describe("Play Groups (Cross-Club Squads)", () => {
@@ -111,5 +112,39 @@ describe("Play Groups (Cross-Club Squads)", () => {
     const first = myGroups[0];
     expect(first.memberCount).toBeGreaterThanOrEqual(1);
     expect(first.myMembership).toBeDefined();
+  });
+
+  it("allows only group owner to change member roles to ADMIN and MEMBER", async () => {
+    const userList = await users().find().limit(3).toArray();
+    expect(userList.length).toBeGreaterThanOrEqual(3);
+
+    const owner = userList[0];
+    const member1 = userList[1];
+    const member2 = userList[2];
+
+    const group = await createGroup(owner.id as string, {
+      name: `Role Test Squad ${Date.now()}`,
+      city: "Bengaluru"
+    });
+
+    await joinGroup(group.id, member1.id as string);
+    await joinGroup(group.id, member2.id as string);
+
+    // Group Owner promotes member1 to ADMIN
+    const promoted = await updateGroupMember(group.id, owner.id as string, member1.id as string, {
+      role: "ADMIN"
+    });
+    expect(promoted.role).toBe("ADMIN");
+
+    // Group Owner changes member1 back to MEMBER
+    const demoted = await updateGroupMember(group.id, owner.id as string, member1.id as string, {
+      role: "MEMBER"
+    });
+    expect(demoted.role).toBe("MEMBER");
+
+    // Non-owner (member2) attempts to change roles -> throws forbidden
+    await expect(
+      updateGroupMember(group.id, member2.id as string, member1.id as string, { role: "ADMIN" })
+    ).rejects.toThrow("Only group owners/leaders can perform this action");
   });
 });

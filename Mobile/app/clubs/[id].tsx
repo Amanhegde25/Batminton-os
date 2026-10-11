@@ -7,7 +7,9 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
-  Alert
+  Alert,
+  TextInput,
+  Modal
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -25,7 +27,10 @@ import {
   Calendar,
   DollarSign,
   AlertCircle,
-  Share2
+  Share2,
+  Shield,
+  MessageSquare,
+  X
 } from "lucide-react-native";
 import { api } from "../../src/lib/api";
 import { useClub } from "../../src/context/club";
@@ -42,6 +47,10 @@ export default function ClubDetailScreen() {
   const { activeClub, switchClub, refreshClubContext } = useClub();
 
   const [isJoining, setIsJoining] = useState(false);
+  const [announcementModal, setAnnouncementModal] = useState(false);
+  const [announcementTitle, setAnnouncementTitle] = useState("");
+  const [announcementBody, setAnnouncementBody] = useState("");
+  const [isBroadcasting, setIsBroadcasting] = useState(false);
 
   const {
     data: club,
@@ -126,6 +135,29 @@ export default function ClubDetailScreen() {
   const isMember = club.myMembership?.status === "ACTIVE";
   const isPending = club.myMembership?.status === "PENDING";
   const isCurrentActive = activeClub?.id === club.id;
+  const isStaff = isMember && (club.myMembership?.role === "OWNER" || club.myMembership?.role === "ADMIN");
+
+  const handleBroadcast = async () => {
+    if (!announcementTitle.trim() || !announcementBody.trim()) {
+      Alert.alert("Missing Fields", "Please enter both an announcement title and message body.");
+      return;
+    }
+    setIsBroadcasting(true);
+    try {
+      const res = await api.clubs.admin.announcement(id!, {
+        title: announcementTitle.trim(),
+        body: announcementBody.trim()
+      });
+      Alert.alert("Delivered", `Broadcast sent to ${res.delivered} club members!`);
+      setAnnouncementModal(false);
+      setAnnouncementTitle("");
+      setAnnouncementBody("");
+    } catch (err: any) {
+      Alert.alert("Error", err.message || "Failed to send announcement");
+    } finally {
+      setIsBroadcasting(false);
+    }
+  };
 
   const attendanceSettings = club.settings?.attendance;
   const bookingSettings = club.settings?.booking;
@@ -288,6 +320,36 @@ export default function ClubDetailScreen() {
               </View>
             </View>
           </Card>
+
+          {isStaff ? (
+            <Card style={[styles.infoCard, { marginTop: 12, borderColor: colors.primary, borderWidth: 1 }]}>
+              <View style={styles.infoRow}>
+                <View style={[styles.infoIconBox, { backgroundColor: colors.primaryLight }]}>
+                  <Shield size={18} color={colors.primary} />
+                </View>
+                <View style={styles.infoTextWrap}>
+                  <Text style={styles.infoTitle}>Staff Command Console</Text>
+                  <Text style={styles.infoSubtitle}>
+                    Role: {club.myMembership?.role} • Plan: {club.subscriptionPlan || "FREE"}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.divider} />
+              <View style={{ flexDirection: "row", gap: 8, marginTop: 4 }}>
+                <Button
+                  title="Broadcast Alert"
+                  onPress={() => setAnnouncementModal(true)}
+                  style={{ flex: 1, paddingVertical: 8 }}
+                />
+                <Button
+                  title="Manage Roster"
+                  variant="outline"
+                  onPress={() => router.push("/members")}
+                  style={{ flex: 1, paddingVertical: 8 }}
+                />
+              </View>
+            </Card>
+          ) : null}
         </View>
       </ScrollView>
 
@@ -326,6 +388,64 @@ export default function ClubDetailScreen() {
           />
         )}
       </View>
+
+      {/* Broadcast Announcement Modal */}
+      <Modal
+        visible={announcementModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setAnnouncementModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Broadcast Announcement</Text>
+              <TouchableOpacity onPress={() => setAnnouncementModal(false)}>
+                <X size={20} color={colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.modalDesc}>
+              This notification will immediately be dispatched to all registered active members of {club.name}.
+            </Text>
+
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Announcement Title (e.g. Schedule Change)"
+              placeholderTextColor={colors.textMuted}
+              value={announcementTitle}
+              onChangeText={setAnnouncementTitle}
+              maxLength={120}
+            />
+
+            <TextInput
+              style={[styles.modalInput, { height: 90, textAlignVertical: "top" }]}
+              placeholder="Message details..."
+              placeholderTextColor={colors.textMuted}
+              value={announcementBody}
+              onChangeText={setAnnouncementBody}
+              multiline
+              maxLength={1000}
+            />
+
+            <View style={{ flexDirection: "row", gap: 10, marginTop: 14 }}>
+              <Button
+                title="Cancel"
+                variant="outline"
+                onPress={() => setAnnouncementModal(false)}
+                style={{ flex: 1 }}
+              />
+              <Button
+                title="Send Broadcast"
+                variant="primary"
+                loading={isBroadcasting}
+                onPress={handleBroadcast}
+                style={{ flex: 1 }}
+              />
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -563,5 +683,46 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: colors.warning,
     textAlign: "center"
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
+    justifyContent: "flex-end"
+  },
+  modalContent: {
+    backgroundColor: colors.card,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: colors.cardBorder
+  },
+  modalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: colors.text
+  },
+  modalDesc: {
+    fontSize: 12,
+    color: colors.textMuted,
+    lineHeight: 18,
+    marginBottom: 14
+  },
+  modalInput: {
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    fontSize: 13,
+    color: colors.text,
+    marginBottom: 10
   }
 });

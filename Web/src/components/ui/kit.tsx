@@ -70,7 +70,19 @@ export function Skeleton({ className = "" }: { className?: string }) {
   return <div className={`animate-pulse rounded-xl bg-muted/70 ${className}`} />;
 }
 
-export function Avatar({ name, src, size = 36 }: { name: string; src?: string | null; size?: number }) {
+export function Avatar({
+  name,
+  src,
+  photoUrl,
+  size = 36
+}: {
+  name: string;
+  src?: string | null;
+  photoUrl?: string | null;
+  size?: number | "sm" | "md" | "lg";
+}) {
+  const pixelSize = typeof size === "number" ? size : size === "sm" ? 28 : size === "lg" ? 48 : 36;
+  const imageSrc = src || photoUrl;
   const initials = name
     .split(/\s+/)
     .map((p) => p[0])
@@ -80,11 +92,11 @@ export function Avatar({ name, src, size = 36 }: { name: string; src?: string | 
   return (
     <span
       className="inline-flex shrink-0 select-none items-center justify-center overflow-hidden rounded-full border border-border/60 bg-muted text-foreground font-semibold"
-      style={{ width: size, height: size, fontSize: size * 0.38 }}
+      style={{ width: pixelSize, height: pixelSize, fontSize: pixelSize * 0.38 }}
     >
-      {src ? (
+      {imageSrc ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={src} alt={name} width={size} height={size} className="h-full w-full object-cover" />
+        <img src={imageSrc} alt={name} width={pixelSize} height={pixelSize} className="h-full w-full object-cover" />
       ) : (
         initials || "?"
       )}

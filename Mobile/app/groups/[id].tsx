@@ -48,7 +48,7 @@ export default function GroupDetailScreen() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
 
-  const [activeSection, setActiveSection] = useState<"sessions" | "wall" | "members">("sessions");
+  const [activeSection, setActiveSection] = useState<"sessions" | "wall" | "members" | "admin">("sessions");
   const [sessionModalVisible, setSessionModalVisible] = useState(false);
   const [newPostContent, setNewPostContent] = useState("");
   const [isPosting, setIsPosting] = useState(false);
@@ -178,7 +178,8 @@ export default function GroupDetailScreen() {
   }
 
   const isMember = !!group.myMembership;
-  const isLeader = group.myMembership?.role === "LEADER";
+  const isLeader = group.myMembership?.role === "LEADER" || user?.role === "SUPER_ADMIN";
+  const isLeaderOrAdmin = isLeader || group.myMembership?.role === "ADMIN";
 
   return (
     <SafeAreaView edges={["top", "left", "right"]} style={styles.container}>
@@ -345,6 +346,29 @@ export default function GroupDetailScreen() {
               Players ({group.members.length})
             </Text>
           </TouchableOpacity>
+
+          {isLeaderOrAdmin && (
+            <TouchableOpacity
+              style={[
+                styles.sectionNavBtn,
+                activeSection === "admin" && styles.sectionNavBtnActive
+              ]}
+              onPress={() => setActiveSection("admin")}
+            >
+              <Shield
+                size={15}
+                color={activeSection === "admin" ? colors.primary : colors.textMuted}
+              />
+              <Text
+                style={[
+                  styles.sectionNavText,
+                  activeSection === "admin" && styles.sectionNavTextActive
+                ]}
+              >
+                {isLeader ? "Leader" : "Admin"}
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* SECTION 1: SESSIONS */}
@@ -625,6 +649,200 @@ export default function GroupDetailScreen() {
                 </View>
               </Card>
             ))}
+          </View>
+        )}
+
+        {/* SECTION 4: LEADER / ADMIN CONSOLE */}
+        {activeSection === "admin" && isLeaderOrAdmin && (
+          <View style={styles.sectionContainer}>
+            {/* Squad Status Card */}
+            <Card style={styles.sessionCard}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                <View style={[styles.heroIconBox, { width: 38, height: 38 }]}>
+                  <Shield size={18} color={colors.primary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 14, fontWeight: "700", color: colors.text }}>
+                    Squad Moderation Console
+                  </Text>
+                  <Text style={{ fontSize: 11, color: colors.textMuted }}>
+                    {group.isPublic ? "Public Squad" : "Private Squad"} • Level: {group.skillLevel} • {group.city || "All regions"}
+                  </Text>
+                </View>
+              </View>
+            </Card>
+
+            {/* Roster Moderation */}
+            <Text style={{ fontSize: 13, fontWeight: "700", color: colors.text, marginTop: 10 }}>
+              Manage Squad Members
+            </Text>
+            {group.members.map((m) => {
+              const isCurrentUser = m.userId === user?.id;
+              return (
+                <Card key={m.id} style={[styles.memberCard, { alignItems: "center" }]}>
+                  <View style={styles.memberAvatar}>
+                    <Text style={styles.memberAvatarText}>
+                      {m.user.name ? m.user.name[0].toUpperCase() : "U"}
+                    </Text>
+                  </View>
+                  <View style={styles.memberInfo}>
+                    <View style={styles.memberNameRow}>
+                      <Text style={styles.memberName}>{m.user.name}</Text>
+                      <Badge
+                        label={m.role === "LEADER" ? "Leader" : m.role === "ADMIN" ? "Admin" : "Player"}
+                        tone={m.role === "LEADER" ? "primary" : m.role === "ADMIN" ? "success" : "muted"}
+                      />
+                    </View>
+                    <Text style={styles.memberSkill}>
+                      {m.user.skillLevel || "Intermediate"} • {isCurrentUser ? "(You)" : m.role}
+                    </Text>
+                  </View>
+                  {!isCurrentUser && (
+                    <View style={{ flexDirection: "row", gap: 6 }}>
+                      {isLeader ? (
+                        <TouchableOpacity
+                          style={{
+                            paddingHorizontal: 8,
+                            paddingVertical: 4,
+                            borderRadius: 8,
+                            backgroundColor: "rgba(255, 255, 255, 0.08)"
+                          }}
+                          onPress={() => {
+                            Alert.alert(
+                              `Change Role: ${m.user.name}`,
+                              "Select new role for this squad member:",
+                              [
+                                { text: "Cancel", style: "cancel" },
+                                {
+                                  text: "Player (Member)",
+                                  onPress: async () => {
+                                    try {
+                                      await api.groups.admin.updateMember(id!, m.userId, { role: "MEMBER" });
+                                      Alert.alert("Updated", `Changed ${m.user.name}'s role to MEMBER`);
+                                      await queryClient.invalidateQueries({ queryKey: ["groupDetail", id] });
+                                    } catch (e: any) {
+                                      Alert.alert("Error", e.message || "Failed to update role");
+                                    }
+                                  }
+                                },
+                                {
+                                  text: "Group Admin",
+                                  onPress: async () => {
+                                    try {
+                                      await api.groups.admin.updateMember(id!, m.userId, { role: "ADMIN" });
+                                      Alert.alert("Updated", `Changed ${m.user.name}'s role to ADMIN`);
+                                      await queryClient.invalidateQueries({ queryKey: ["groupDetail", id] });
+                                    } catch (e: any) {
+                                      Alert.alert("Error", e.message || "Failed to update role");
+                                    }
+                                  }
+                                },
+                                {
+                                  text: "Group Leader",
+                                  onPress: async () => {
+                                    try {
+                                      await api.groups.admin.updateMember(id!, m.userId, { role: "LEADER" });
+                                      Alert.alert("Updated", `Changed ${m.user.name}'s role to LEADER`);
+                                      await queryClient.invalidateQueries({ queryKey: ["groupDetail", id] });
+                                    } catch (e: any) {
+                                      Alert.alert("Error", e.message || "Failed to update role");
+                                    }
+                                  }
+                                }
+                              ]
+                            );
+                          }}
+                        >
+                          <Text style={{ fontSize: 11, color: colors.text, fontWeight: "600" }}>
+                            Role
+                          </Text>
+                        </TouchableOpacity>
+                      ) : null}
+
+                      <TouchableOpacity
+                        style={{
+                          paddingHorizontal: 8,
+                          paddingVertical: 4,
+                          borderRadius: 8,
+                          backgroundColor: "rgba(239, 68, 68, 0.15)"
+                        }}
+                        onPress={() => {
+                          Alert.alert("Remove Member", `Remove ${m.user.name} from this PlayGroup?`, [
+                            { text: "Cancel", style: "cancel" },
+                            {
+                              text: "Remove",
+                              style: "destructive",
+                              onPress: async () => {
+                                try {
+                                  await api.groups.admin.updateMember(id!, m.userId, { remove: true });
+                                  Alert.alert("Removed", `${m.user.name} has been removed.`);
+                                  await queryClient.invalidateQueries({ queryKey: ["groupDetail", id] });
+                                } catch (e: any) {
+                                  Alert.alert("Error", e.message || "Failed to remove member");
+                                }
+                              }
+                            }
+                          ]);
+                        }}
+                      >
+                        <Text style={{ fontSize: 11, color: colors.danger, fontWeight: "600" }}>Remove</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </Card>
+              );
+            })}
+
+            {/* Wall Moderation */}
+            <Text style={{ fontSize: 13, fontWeight: "700", color: colors.text, marginTop: 10 }}>
+              Discussion Moderation
+            </Text>
+            {group.posts.length === 0 ? (
+              <Card style={{ padding: 14 }}>
+                <Text style={{ fontSize: 12, color: colors.textMuted }}>No posts to moderate.</Text>
+              </Card>
+            ) : (
+              group.posts.map((p) => (
+                <Card key={p.id} style={{ padding: 12 }}>
+                  <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
+                    <View style={{ flex: 1, marginRight: 8 }}>
+                      <Text style={{ fontSize: 12, fontWeight: "600", color: colors.text }}>
+                        {p.user.name}
+                      </Text>
+                      <Text style={{ fontSize: 12, color: colors.text, marginTop: 2 }}>{p.content}</Text>
+                    </View>
+                    <TouchableOpacity
+                      style={{
+                        paddingHorizontal: 8,
+                        paddingVertical: 4,
+                        borderRadius: 6,
+                        backgroundColor: "rgba(239, 68, 68, 0.12)"
+                      }}
+                      onPress={() => {
+                        Alert.alert("Delete Post", "Delete this post from the group wall?", [
+                          { text: "Cancel", style: "cancel" },
+                          {
+                            text: "Delete",
+                            style: "destructive",
+                            onPress: async () => {
+                              try {
+                                await api.groups.admin.deletePost(id!, p.id);
+                                Alert.alert("Deleted", "Post removed from squad wall.");
+                                await queryClient.invalidateQueries({ queryKey: ["groupDetail", id] });
+                              } catch (e: any) {
+                                Alert.alert("Error", e.message || "Failed to delete post");
+                              }
+                            }
+                          }
+                        ]);
+                      }}
+                    >
+                      <Text style={{ fontSize: 11, color: colors.danger, fontWeight: "600" }}>Delete</Text>
+                    </TouchableOpacity>
+                  </View>
+                </Card>
+              ))
+            )}
           </View>
         )}
       </ScrollView>

@@ -151,7 +151,13 @@ export function createApiClient(config: ApiClientConfig) {
         return request<NearbyClub[]>(`/api/clubs${queryStr ? `?${queryStr}` : ""}`);
       },
       join: (clubId: string) =>
-        request<{ status: string }>(`/api/clubs/${clubId}/join`, { method: "POST" })
+        request<{ status: string }>(`/api/clubs/${clubId}/join`, { method: "POST" }),
+      admin: {
+        overview: (clubId: string) => request<any>(`/api/clubs/${clubId}/admin/overview`),
+        revenue: (clubId: string, days = 30) => request<any>(`/api/clubs/${clubId}/admin/revenue?days=${days}`),
+        announcement: (clubId: string, data: { title: string; body: string }) =>
+          request<{ delivered: number }>(`/api/clubs/${clubId}/admin/announcements`, { method: "POST", json: data })
+      }
     },
 
     // 3. Attendance
@@ -341,7 +347,15 @@ export function createApiClient(config: ApiClientConfig) {
         }),
       posts: (groupId: string) => request<PlayGroupPostItem[]>(`/api/groups/${groupId}/posts`),
       createPost: (groupId: string, content: string) =>
-        request<PlayGroupPostItem>(`/api/groups/${groupId}/posts`, { method: "POST", json: { content } })
+        request<PlayGroupPostItem>(`/api/groups/${groupId}/posts`, { method: "POST", json: { content } }),
+      admin: {
+        analytics: (groupId: string) => request<any>(`/api/groups/${groupId}/analytics`),
+        update: (groupId: string, data: any) => request<any>(`/api/groups/${groupId}`, { method: "PATCH", json: data }),
+        deletePost: (groupId: string, postId: string) =>
+          request<any>(`/api/groups/${groupId}/posts/${postId}`, { method: "DELETE" }),
+        updateMember: (groupId: string, userId: string, data: { role?: string; remove?: boolean }) =>
+          request<any>(`/api/groups/${groupId}/members/${userId}`, { method: "PATCH", json: data })
+      }
     }
   };
 }

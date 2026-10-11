@@ -25,6 +25,32 @@ export const FEATURES = {
 } as const;
 export type Feature = keyof typeof FEATURES;
 
+export const SPORTS = ["BADMINTON", "TENNIS", "PICKLEBALL", "SQUASH", "TABLE_TENNIS"] as const;
+export type Sport = typeof SPORTS[number];
+
+export const DAYS_OF_WEEK = [
+  "MONDAY",
+  "TUESDAY",
+  "WEDNESDAY",
+  "THURSDAY",
+  "FRIDAY",
+  "SATURDAY",
+  "SUNDAY"
+] as const;
+export type DayOfWeek = typeof DAYS_OF_WEEK[number];
+
+export const DEFAULT_COACHING_SLOTS = [
+  "06:00 - 07:00",
+  "07:00 - 08:00",
+  "08:00 - 09:00",
+  "09:00 - 10:00",
+  "16:00 - 17:00",
+  "17:00 - 18:00",
+  "18:00 - 19:00",
+  "19:00 - 20:00",
+  "20:00 - 21:00"
+];
+
 export const FEATURE_MIN_PLAN: Record<string, Plan> = {
   MEMBERS: "FREE",
   ATTENDANCE: "FREE",
@@ -60,6 +86,9 @@ export const CLUB_ROLES = ["OWNER", "ADMIN", "COACH", "PLAYER"] as const;
 export type ClubRole = (typeof CLUB_ROLES)[number];
 export const MANAGER_ROLES: ClubRole[] = ["OWNER", "ADMIN"];
 export const STAFF_ROLES: ClubRole[] = ["OWNER", "ADMIN", "COACH"];
+
+export const GROUP_ROLES = ["LEADER", "ADMIN", "MEMBER"] as const;
+export type GroupRole = (typeof GROUP_ROLES)[number];
 
 export const MEMBER_STATUSES = ["ACTIVE", "PENDING", "BLOCKED", "REMOVED"] as const;
 
@@ -127,11 +156,15 @@ export const NOTIFICATION_TYPES = {
   MEMBERSHIP_APPROVED: "MEMBERSHIP_APPROVED",
   MEMBERSHIP_ROLE: "MEMBERSHIP_ROLE",
   WALLET_ADJUSTED: "WALLET_ADJUSTED",
-  PLAN_CHANGED: "PLAN_CHANGED"
+  PLAN_CHANGED: "PLAN_CHANGED",
+  ANNOUNCEMENT: "ANNOUNCEMENT"
 } as const;
 
 export interface ClubSettings {
   sport: string;
+  openingTime?: string;
+  closingTime?: string;
+  scheduleNotes?: string;
   attendance: {
     startMinutes: number;
     graceMinutes: number;
@@ -150,6 +183,9 @@ export interface ClubSettings {
 
 export const DEFAULT_CLUB_SETTINGS: ClubSettings = {
   sport: "BADMINTON",
+  openingTime: "06:00",
+  closingTime: "22:00",
+  scheduleNotes: "Open daily: 6:00 AM – 10:00 PM",
   attendance: {
     startMinutes: 18 * 60,
     graceMinutes: 10,
@@ -176,6 +212,9 @@ export function parseClubSettings(raw: string | null | undefined): ClubSettings 
   return {
     ...DEFAULT_CLUB_SETTINGS,
     ...parsed,
+    openingTime: parsed.openingTime ?? DEFAULT_CLUB_SETTINGS.openingTime,
+    closingTime: parsed.closingTime ?? DEFAULT_CLUB_SETTINGS.closingTime,
+    scheduleNotes: parsed.scheduleNotes ?? DEFAULT_CLUB_SETTINGS.scheduleNotes,
     attendance: { ...DEFAULT_CLUB_SETTINGS.attendance, ...(parsed.attendance ?? {}) },
     booking: { ...DEFAULT_CLUB_SETTINGS.booking, ...(parsed.booking ?? {}) },
     membership: { ...DEFAULT_CLUB_SETTINGS.membership, ...(parsed.membership ?? {}) },
@@ -207,5 +246,19 @@ export const AUDIT_ACTIONS = {
   ATTENDANCE_MARKED: "attendance.marked",
   DAILY_SWEEP: "attendance.daily_sweep",
   COURT_UPDATED: "court.updated",
-  TOURNAMENT_EVENT: "tournament.event"
+  TOURNAMENT_EVENT: "tournament.event",
+  // ── Platform admin actions ──
+  USER_SUSPENDED: "platform.user_suspended",
+  USER_DELETED: "platform.user_deleted",
+  USER_ROLE_CHANGED: "platform.user_role_changed",
+  CLUB_DELETED: "platform.club_deleted",
+  GROUP_DELETED_PLATFORM: "platform.group_deleted",
+  // ── Club admin actions ──
+  ANNOUNCEMENT_SENT: "club.announcement_sent",
+  // ── Group admin actions ──
+  GROUP_UPDATED: "group.updated",
+  GROUP_MEMBER_REMOVED: "group.member_removed",
+  GROUP_MEMBER_ROLE_CHANGED: "group.member_role_changed",
+  GROUP_POST_DELETED: "group.post_deleted",
+  GROUP_SESSION_CANCELLED: "group.session_cancelled"
 } as const;

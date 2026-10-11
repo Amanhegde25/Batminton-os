@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { Button } from "./kit";
 import { X } from "@/components/icons";
@@ -116,8 +116,12 @@ export function useToast() {
       {message.text}
     </div>
   ) : null;
+  const toast = useCallback((text: string, tone: "error" | "success" = "success") => {
+    setMessage({ text, tone });
+  }, []);
+
   return {
-    toast: (text: string, tone: "error" | "success" = "success") => setMessage({ text, tone }),
+    toast,
     node
   };
 }

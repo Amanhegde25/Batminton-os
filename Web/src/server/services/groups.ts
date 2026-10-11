@@ -1,6 +1,9 @@
 import { playGroups, playGroupMembers, playGroupSessions, playGroupSessionRsvps, playGroupPosts, users, clubs } from "@/server/db";
 import { ApiError } from "@/lib/api";
 import { cuid } from "@/lib/id";
+import { audit } from "./audit";
+import { AUDIT_ACTIONS } from "@/lib/constants";
+import { requireGroupLeader, requireGroupAdminOrLeader } from "@/server/rbac";
 
 function slugify(name: string): string {
   return name
@@ -498,5 +501,187 @@ export async function postMessage(groupId: string, userId: string, content: stri
   return {
     ...postDoc,
     user: user ? { id: user.id, name: user.name, photoUrl: user.photoUrl } : null
+  };
+}
+
+// ── Group Admin & Moderation Operations ──
+
+export async function updateGroup(
+  groupId: string,
+  userId: string,
+  patch: Partial<CreateGroupInput>
+) {
+  await requireGroupAdminOrLeader(groupId, userId);
+  const group = await playGroups().findOne({ id: groupId, deletedAt: null });
+  if (!group) throw ApiError.notFound("Group not found");
+
+  const updateFields: Record<string, any> = { updatedAt: new Date() };
+  if (typeof patch.name === "string" && patch.name.trim()) updateFields.name = patch.name.trim();
+  if (typeof patch.description === "string") updateFields.description = patch.description.trim() || null;
+  if (typeof patch.city === "string") updateFields.city = patch.city.trim() || null;
+  if (typeof patch.skillLevel === "string") updateFields.skillLevel = patch.skillLevel;
+  if (typeof patch.isPublic === "boolean") updateFields.isPublic = patch.isPublic;
+  if (typeof patch.logoUrl === "string") updateFields.logoUrl = patch.logoUrl || null;
+
+  await playGroups().updateOne({ id: groupId }, { $set: updateFields });
+
+  await audit({
+    actorUserId: userId,
+    action: AUDIT_ACTIONS.GROUP_UPDATED,
+    entityType: "PlayGroup",
+    entityId: groupId,
+    newValue: updateFields
+  });
+
+  return { ...group, ...updateFields };
+}
+
+export async function listGroupMembers(groupId: string, userId: string) {
+  const caller = await playGroupMembers().findOne({ groupId, userId });
+  if (!caller) throw ApiError.forbidden("You are not a member of this group");
+
+  const members = await playGroupMembers().find({ groupId }).sort({ joinedAt: 1 }).toArray();
+  const userIds = members.map((m) => m.userId as string);
+
+  const userDocs = userIds.length > 0
+    ? await users().find({ id: { $in: userIds } }, {
+      projection: { id: 1, name: 1, email: 1, mobile: 1, photoUrl: 1, skillLevel: 1, playingStyle: 1 }
+    }).toArray()
+    : [];
+
+  const userMap = new Map(userDocs.map((u) => [u.id as string, u]));
+
+  return members.map((m) => {
+    const u = userMap.get(m.userId as string);
+    return {
+      id: m.id,
+      groupId: m.groupId,
+      userId: m.userId,
+      role: m.role,
+      status: m.status,
+      joinedAt: m.joinedAt,
+      user: u ? {
+        id: u.id,
+        name: u.name,
+        email: u.email,
+        mobile: u.mobile,
+        photoUrl: u.photoUrl,
+        skillLevel: u.skillLevel,
+        playingStyle: u.playingStyle
+      } : null
+    };
+  });
+}
+
+export async function updateGroupMember(
+  groupId: string,
+  actorUserId: string,
+  targetUserId: string,
+  options: { role?: "LEADER" | "ADMIN" | "MEMBER"; remove?: boolean }
+) {
+  const targetMember = await playGroupMembers().findOne({ groupId, userId: targetUserId });
+  if (!targetMember) throw ApiError.notFound("Member not found in this group");
+
+  if (options.role) {
+    // Only group owner/leader (or platform super admin) has the right to change member roles
+    await requireGroupLeader(groupId, actorUserId);
+    await playGroupMembers().updateOne({ id: targetMember.id }, { $set: { role: options.role } });
+    await audit({
+      actorUserId,
+      action: AUDIT_ACTIONS.GROUP_MEMBER_ROLE_CHANGED,
+      entityType: "PlayGroupMember",
+      entityId: targetMember.id as string,
+      newValue: { role: options.role }
+    });
+    return { ...targetMember, role: options.role };
+  }
+
+  if (options.remove) {
+    if (targetUserId === actorUserId) {
+      throw ApiError.badRequest("Group leaders cannot remove themselves via admin panel. Use leave group instead.");
+    }
+    // Group leaders or admins can remove regular members, but only leader can remove another admin or leader
+    if (targetMember.role === "LEADER" || targetMember.role === "ADMIN") {
+      await requireGroupLeader(groupId, actorUserId);
+    } else {
+      await requireGroupAdminOrLeader(groupId, actorUserId);
+    }
+    await playGroupMembers().deleteOne({ id: targetMember.id });
+    await audit({
+      actorUserId,
+      action: AUDIT_ACTIONS.GROUP_MEMBER_REMOVED,
+      entityType: "PlayGroupMember",
+      entityId: targetMember.id as string,
+      newValue: { removedUserId: targetUserId }
+    });
+    return { removed: true };
+  }
+
+  throw ApiError.badRequest("No valid action specified");
+}
+
+export async function deleteGroupSession(
+  groupId: string,
+  sessionId: string,
+  actorUserId: string
+) {
+  await requireGroupAdminOrLeader(groupId, actorUserId);
+  const session = await playGroupSessions().findOne({ id: sessionId, groupId });
+  if (!session) throw ApiError.notFound("Session not found");
+
+  await playGroupSessions().deleteOne({ id: sessionId });
+  await playGroupSessionRsvps().deleteMany({ sessionId });
+
+  await audit({
+    actorUserId,
+    action: AUDIT_ACTIONS.GROUP_SESSION_CANCELLED,
+    entityType: "PlayGroupSession",
+    entityId: sessionId
+  });
+
+  return { cancelled: true };
+}
+
+export async function deleteGroupPost(
+  groupId: string,
+  postId: string,
+  actorUserId: string
+) {
+  await requireGroupAdminOrLeader(groupId, actorUserId);
+  const post = await playGroupPosts().findOne({ id: postId, groupId });
+  if (!post) throw ApiError.notFound("Post not found");
+
+  await playGroupPosts().deleteOne({ id: postId });
+
+  await audit({
+    actorUserId,
+    action: AUDIT_ACTIONS.GROUP_POST_DELETED,
+    entityType: "PlayGroupPost",
+    entityId: postId
+  });
+
+  return { deleted: true };
+}
+
+export async function groupAnalytics(groupId: string, actorUserId: string) {
+  await requireGroupAdminOrLeader(groupId, actorUserId);
+  const group = await playGroups().findOne({ id: groupId, deletedAt: null });
+  if (!group) throw ApiError.notFound("Group not found");
+
+  const [totalMembers, totalSessions, totalPosts, rsvps] = await Promise.all([
+    playGroupMembers().countDocuments({ groupId, status: "ACTIVE" }),
+    playGroupSessions().countDocuments({ groupId }),
+    playGroupPosts().countDocuments({ groupId }),
+    playGroupSessionRsvps().countDocuments({ status: "YES" })
+  ]);
+
+  return {
+    group: { id: group.id, name: group.name, slug: group.slug },
+    counts: {
+      members: totalMembers,
+      sessions: totalSessions,
+      posts: totalPosts,
+      totalConfirmedRsvps: rsvps
+    }
   };
 }

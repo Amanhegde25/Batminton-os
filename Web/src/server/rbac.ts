@@ -1,7 +1,7 @@
 import { ApiError } from "@/lib/api";
 import type { SessionUser } from "./auth/types";
 import { MANAGER_ROLES, STAFF_ROLES, planAllows, PLAN_LIMITS, type Plan, type Feature } from "@/lib/constants";
-import { clubs, clubMembers } from "@/server/db";
+import { users, clubs, clubMembers, playGroups, playGroupMembers } from "@/server/db";
 
 export interface ClubContext {
   clubId: string;
@@ -91,4 +91,39 @@ export async function assertLimit(
       throw ApiError.paymentRequired(`Member limit reached for ${plan} plan`, "PLAN_LIMIT");
     }
   }
+}
+
+// ── PlayGroup role guards ──
+
+export async function requireGroupLeader(groupId: string, userId: string): Promise<void> {
+  const u = await users().findOne({ id: userId });
+  if (u && u.role === "SUPER_ADMIN") return;
+
+  const group = await playGroups().findOne({ id: groupId });
+  if (group && group.createdById === userId) return;
+
+  const member = await playGroupMembers().findOne({ groupId, userId });
+  if (!member || member.role !== "LEADER") {
+    throw ApiError.forbidden("Only group owners/leaders can perform this action");
+  }
+}
+
+export async function requireGroupAdminOrLeader(groupId: string, userId: string): Promise<{ id: string; role: string }> {
+  const u = await users().findOne({ id: userId });
+  if (u && u.role === "SUPER_ADMIN") return { id: "super_admin", role: "LEADER" };
+
+  const group = await playGroups().findOne({ id: groupId });
+  if (group && group.createdById === userId) return { id: "owner", role: "LEADER" };
+
+  const member = await playGroupMembers().findOne({ groupId, userId });
+  if (!member || (member.role !== "LEADER" && member.role !== "ADMIN")) {
+    throw ApiError.forbidden("Group leader or admin access required");
+  }
+  return { id: member.id as string, role: member.role as string };
+}
+
+export async function requireGroupMember(groupId: string, userId: string): Promise<{ id: string; role: string }> {
+  const member = await playGroupMembers().findOne({ groupId, userId });
+  if (!member) throw ApiError.forbidden("You are not a member of this group");
+  return { id: member.id as string, role: member.role as string };
 }

@@ -7,6 +7,9 @@ export type UserRole = (typeof USER_ROLES)[number];
 export const CLUB_ROLES = ["OWNER", "ADMIN", "COACH", "PLAYER"] as const;
 export type ClubRole = (typeof CLUB_ROLES)[number];
 
+export const GROUP_ROLES = ["LEADER", "ADMIN", "MEMBER"] as const;
+export type GroupRole = (typeof GROUP_ROLES)[number];
+
 export const NOTIFICATION_TONES: Record<string, "primary" | "success" | "warning" | "danger" | "muted"> = {
   MATCH_CREATED: "primary",
   MATCH_RESULT: "success",

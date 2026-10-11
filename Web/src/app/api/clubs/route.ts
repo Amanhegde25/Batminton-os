@@ -2,7 +2,7 @@ import { handler, ok, parseBody, getIp, ApiError } from "@/lib/api";
 import { z } from "zod";
 import { rateLimit } from "@/server/rate-limit";
 import { currentUser } from "@/server/auth/session";
-import { requireUser } from "@/server/rbac";
+import { requireUser, requireSuperAdmin } from "@/server/rbac";
 import { createClub, listPublicClubs } from "@/server/services/clubs";
 import { clubs } from "@/server/db";
 
@@ -34,12 +34,13 @@ const createSchema = z.object({
   address: z.string().max(200).optional(),
   logoUrl: z.string().max(500).optional(),
   lat: z.number().optional(),
-  lng: z.number().optional()
+  lng: z.number().optional(),
+  ownerId: z.string().optional()
 });
 
 export const POST = handler(async (req) => {
-  const user = await requireUser(await currentUser());
-  if (!rateLimit(`club-create:${getIp(req)}`, 5, 3600_000)) throw ApiError.tooMany();
+  const user = await requireSuperAdmin(await currentUser());
+  if (!rateLimit(`club-create:${getIp(req)}`, 10, 3600_000)) throw ApiError.tooMany();
   const input = await parseBody(req, createSchema);
   const club = await createClub(user, input);
   const full = await clubs().findOne({ id: club.id });

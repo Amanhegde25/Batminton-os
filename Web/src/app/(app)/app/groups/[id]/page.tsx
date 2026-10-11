@@ -30,7 +30,8 @@ import {
   Check,
   X,
   ExternalLink,
-  DollarSign
+  DollarSign,
+  Shield
 } from "@/components/icons";
 
 interface ClubOption {
@@ -261,7 +262,7 @@ export default function GroupDetailPage() {
   }
 
   const isMember = group.myMembership?.status === "ACTIVE";
-  const isLeader = group.myMembership?.role === "LEADER";
+  const isLeader = group.myMembership?.role === "LEADER" || group.myMembership?.role === "ADMIN";
 
   return (
     <div className="space-y-6">
@@ -308,6 +309,13 @@ export default function GroupDetailPage() {
           <div className="flex flex-wrap items-center gap-2">
             {isMember ? (
               <>
+                {isLeader && (
+                  <Link href={`/app/groups/${id}/admin`}>
+                    <Button variant="outline" size="sm" className="gap-1.5 text-xs">
+                      <Shield className="h-3.5 w-3.5 text-primary" /> Group Admin
+                    </Button>
+                  </Link>
+                )}
                 <Button onClick={() => setScheduleOpen(true)} className="gap-1.5 text-xs sm:text-sm">
                   <Plus className="h-4 w-4" /> Schedule Session
                 </Button>

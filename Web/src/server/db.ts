@@ -62,3 +62,5 @@ export const playGroupMembers = () => col("playGroupMembers");
 export const playGroupSessions = () => col("playGroupSessions");
 export const playGroupSessionRsvps = () => col("playGroupSessionRsvps");
 export const playGroupPosts = () => col("playGroupPosts");
+export const coaches = () => col("coaches");
+export const coachingBookings = () => col("coachingBookings");

@@ -210,16 +210,29 @@ export async function changeRole(clubId: string, actor: SessionUser, memberId: s
   if (!["OWNER", "ADMIN", "COACH", "PLAYER"].includes(role)) throw ApiError.badRequest("Invalid role");
   const member = await clubMembers().findOne({ id: memberId, clubId });
   if (!member || member.status !== "ACTIVE") throw ApiError.notFound("Active member not found");
+
+  if (actor.role !== "SUPER_ADMIN") {
+    const actorMembership = await clubMembers().findOne({ clubId, userId: actor.id, status: "ACTIVE" });
+    if (!actorMembership || !["OWNER", "ADMIN"].includes(actorMembership.role as string)) {
+      throw ApiError.forbidden("Only club owners and admins can change member roles");
+    }
+
+    // Admins cannot alter an owner or another admin, and cannot promote anyone to owner or admin
+    if (actorMembership.role !== "OWNER") {
+      if (member.role === "OWNER" || member.role === "ADMIN") {
+        throw ApiError.forbidden("Only the club owner can change roles of owners or admins");
+      }
+      if (role === "OWNER" || role === "ADMIN") {
+        throw ApiError.forbidden("Only the club owner can assign OWNER or ADMIN roles");
+      }
+    }
+  }
+
   if (member.role === "OWNER" && role !== "OWNER") {
     const owners = await clubMembers().countDocuments({ clubId, role: "OWNER", status: "ACTIVE" });
     if (owners <= 1) throw ApiError.conflict("Cannot demote the only owner. Promote another admin first.");
   }
-  if ((role === "OWNER" || role === "ADMIN") && actor.role !== "SUPER_ADMIN") {
-    const actorMembership = await clubMembers().findOne({ clubId, userId: actor.id });
-    if (!actorMembership || actorMembership.role !== "OWNER") {
-      throw ApiError.forbidden("Only the club owner can assign OWNER/ADMIN roles");
-    }
-  }
+
   const updated = await clubMembers().findOneAndUpdate(
     { id: memberId },
     { $set: { role } },
@@ -250,6 +263,13 @@ export async function removeMember(clubId: string, actor: SessionUser, memberId:
   if (member.role === "OWNER") {
     const owners = await clubMembers().countDocuments({ clubId, role: "OWNER", status: "ACTIVE" });
     if (owners <= 1) throw ApiError.conflict("Cannot remove the only owner");
+  }
+
+  if ((member.role === "OWNER" || member.role === "ADMIN") && actor.role !== "SUPER_ADMIN") {
+    const actorMembership = await clubMembers().findOne({ clubId, userId: actor.id, status: "ACTIVE" });
+    if (!actorMembership || actorMembership.role !== "OWNER") {
+      throw ApiError.forbidden("Only the club owner can remove an owner or admin");
+    }
   }
   const updated = await clubMembers().findOneAndUpdate(
     { id: memberId },

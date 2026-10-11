@@ -31,6 +31,9 @@ export interface NearbyClubItem {
   description: string | null;
   subscriptionPlan: string;
   sport: string;
+  openingTime?: string;
+  closingTime?: string;
+  scheduleNotes?: string | null;
   courtCount: number;
   memberCount: number;
   distanceKm: number | null;
@@ -383,15 +386,22 @@ export function NearbyClubsBar() {
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-3 rounded-xl border bg-muted/40 p-3 text-sm">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 rounded-xl border bg-muted/40 p-3 text-sm">
               <div>
                 <p className="text-xs text-muted-foreground">Location</p>
                 <p className="font-medium">{selectedClub.city || "—"}</p>
                 {selectedClub.address && <p className="text-xs text-muted-foreground mt-0.5">{selectedClub.address}</p>}
               </div>
               <div>
+                <p className="text-xs text-muted-foreground">Operating Hours</p>
+                <p className="font-medium">
+                  {selectedClub.openingTime || "06:00"} – {selectedClub.closingTime || "22:00"}
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">{selectedClub.scheduleNotes || "Daily open play"}</p>
+              </div>
+              <div>
                 <p className="text-xs text-muted-foreground">Facility Details</p>
-                <p className="font-medium">{selectedClub.courtCount} Badminton Courts</p>
+                <p className="font-medium">{selectedClub.courtCount} Courts</p>
                 <p className="text-xs text-muted-foreground mt-0.5">{selectedClub.memberCount} registered players</p>
               </div>
             </div>

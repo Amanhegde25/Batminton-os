@@ -19,6 +19,9 @@ export const GET = handler(async (_req, { params }) => {
     city: club.city,
     address: club.address,
     logoUrl: club.logoUrl,
+    lat: club.lat,
+    lng: club.lng,
+    isPublic: club.isPublic,
     ownerId: club.ownerId,
     owner: club.owner,
     subscriptionPlan: club.subscriptionPlan,
@@ -41,10 +44,15 @@ const patchSchema = z.object({
   city: z.string().max(80).optional(),
   address: z.string().max(200).optional(),
   logoUrl: z.string().max(500).optional(),
+  isPublic: z.boolean().optional(),
   lat: z.number().optional(),
   lng: z.number().optional(),
   settings: z
     .object({
+      sport: z.string().optional(),
+      openingTime: z.string().optional(),
+      closingTime: z.string().optional(),
+      scheduleNotes: z.string().max(200).optional(),
       attendance: z
         .object({
           startMinutes: z.number().min(0).max(1439).optional(),
