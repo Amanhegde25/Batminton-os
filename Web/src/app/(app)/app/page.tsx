@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useSession } from "@/components/session";
 import { api } from "@/lib/client";
-import { Badge, Button, Card, Spinner, StatCard, Sparkline, Avatar } from "@/components/ui";
+import { Badge, Button, Card, Spinner, StatCard, Avatar } from "@/components/ui";
 import { NearbyClubsBar } from "@/components/nearby-clubs-bar";
 import {
   ShuttlecockIcon,
@@ -12,17 +12,21 @@ import {
   Clock,
   Check,
   TrendingUp,
-  TrendingDown,
   ArrowRight,
   Shield,
   Activity,
   Users,
   MapPin,
-  Calendar
+  Calendar,
+  Award,
+  Wallet,
+  Sparkles,
+  Building2,
+  Brain
 } from "@/components/icons";
 
 function money(n: number) {
-  return `₹${(n / 100).toLocaleString("en-IN")}`;
+  return `₹${(n / 100).toLocaleString("en-IN", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
 }
 
 interface WalletData {
@@ -44,15 +48,74 @@ interface RatingCard {
   trend: { label: string; value: number }[];
 }
 
-interface TodayMatch {
+interface MatchTeamPlayer {
+  userId: string;
+  user?: { id: string; name: string; photoUrl?: string | null };
+}
+
+interface MatchTeam {
+  teamIndex: number;
+  players: MatchTeamPlayer[];
+}
+
+interface MatchScore {
+  setNumber: number;
+  scoreA: number;
+  scoreB: number;
+}
+
+interface CompletedMatch {
   id: string;
+  type: string;
   status: string;
-  teams: { teamIndex: number; players: { name: string }[] }[];
+  teams: MatchTeam[];
+  scores: MatchScore[];
+  court?: { id: string; name: string } | null;
+  endedAt?: string | null;
 }
 
 interface AttendanceRecord {
   day: string;
   status: string;
+}
+
+interface AttendanceRosterRow {
+  userId: string;
+  name: string;
+  photoUrl?: string | null;
+  status: string | null;
+  method?: string | null;
+  checkInTime?: string | null;
+}
+
+interface CourtItem {
+  id: string;
+  name: string;
+  number?: number;
+  type?: string;
+  status: "AVAILABLE" | "OCCUPIED" | "MAINTENANCE" | "DISABLED";
+  hourlyFee?: number;
+}
+
+interface CourtBookingItem {
+  id: string;
+  courtId: string;
+  courtName?: string;
+  startTime: string;
+  endTime: string;
+  notes?: string | null;
+  userName?: string;
+  status?: string;
+}
+
+interface CoachingBookingItem {
+  id: string;
+  coachName: string;
+  sessionDate: string;
+  timeSlot: string;
+  dayOfWeek: string;
+  status: string;
+  fee: number;
 }
 
 interface AdminStats {
@@ -73,72 +136,301 @@ interface AdminStats {
 const ATTENDED = ["PRESENT", "LATE", "GUEST"];
 
 export default function DashboardPage() {
-  const { me, activeClubId, activeMembership } = useSession();
+  const { me, activeClubId, setActiveClubId, activeMembership } = useSession();
+  const [loadingClubData, setLoadingClubData] = useState(false);
   const [wallet, setWallet] = useState<WalletData | null>(null);
   const [rating, setRating] = useState<RatingCard | null>(null);
-  const [todayMatches, setTodayMatches] = useState<TodayMatch[]>([]);
+  const [recentMatches, setRecentMatches] = useState<CompletedMatch[]>([]);
   const [history, setHistory] = useState<AttendanceRecord[]>([]);
+  const [attendanceRows, setAttendanceRows] = useState<AttendanceRosterRow[]>([]);
+  const [courts, setCourts] = useState<CourtItem[]>([]);
+  const [bookings, setBookings] = useState<CourtBookingItem[]>([]);
+  const [coachingBookings, setCoachingBookings] = useState<CoachingBookingItem[]>([]);
   const [adminStats, setAdminStats] = useState<AdminStats | null>(null);
   const [checkedIn, setCheckedIn] = useState<boolean | null>(null);
   const [myGroups, setMyGroups] = useState<any[]>([]);
-  const [courts, setCourts] = useState<any[]>([]);
 
   useEffect(() => {
-    if (!me || !activeClubId) return;
+    if (!me) return;
+
+    // Load play groups across clubs
+    void api<any[]>("/groups?myOnly=true")
+      .then((g) => setMyGroups(Array.isArray(g) ? g : []))
+      .catch(() => setMyGroups([]));
+
+    if (!activeClubId) {
+      setWallet(null);
+      setRating(null);
+      setRecentMatches([]);
+      setHistory([]);
+      setAttendanceRows([]);
+      setCourts([]);
+      setBookings([]);
+      setCoachingBookings([]);
+      setAdminStats(null);
+      return;
+    }
+
+    setLoadingClubData(true);
     void (async () => {
       try {
-        const w = await api<WalletData>(`/clubs/${activeClubId}/wallet`);
-        setWallet(w);
-      } catch {}
-      try {
-        const r = await api<RatingCard>(`/clubs/${activeClubId}/players/${me.id}/rating`);
-        setRating(r);
-      } catch {}
-      try {
-        const m = await api<{ items: TodayMatch[] }>(`/clubs/${activeClubId}/matches?userId=${me.id}&day=today`);
-        setTodayMatches(m.items.slice(0, 5));
-      } catch {}
-      try {
-        const rows = await api<AttendanceRecord[]>(`/clubs/${activeClubId}/attendance?view=history&userId=${me.id}`);
-        setHistory(Array.isArray(rows) ? rows : []);
-      } catch {}
-      try {
-        const c = await api<{ courts?: any[] } | any[]>(`/clubs/${activeClubId}/courts`);
-        setCourts(Array.isArray(c) ? c : (c.courts || []));
-      } catch {}
-      try {
-        const roster = await api<{ roster: { member: { userId: string }; record: { status: string } | null }[] }>(
-          `/clubs/${activeClubId}/attendance`
-        );
-        setCheckedIn(
-          roster?.roster?.some(
-            (row) =>
-              row.member?.userId === me.id && row.record != null && ATTENDED.includes(row.record.status)
-          ) ?? false
-        );
-      } catch {}
-      if (["OWNER", "ADMIN", "COACH"].includes(activeMembership?.role ?? "")) {
-        try {
-          setAdminStats(await api(`/clubs/${activeClubId}/dashboard`));
-        } catch {}
+        const [
+          walletRes,
+          ratingRes,
+          matchesRes,
+          historyRes,
+          courtsRes,
+          bookingsRes,
+          attendanceRes,
+          coachingRes
+        ] = await Promise.allSettled([
+          api<WalletData>(`/clubs/${activeClubId}/wallet`),
+          api<RatingCard>(`/clubs/${activeClubId}/players/${me.id}/rating`),
+          api<{ items: CompletedMatch[] }>(`/clubs/${activeClubId}/matches?status=COMPLETED&page=1`),
+          api<AttendanceRecord[]>(`/clubs/${activeClubId}/attendance?view=history&userId=${me.id}`),
+          api<CourtItem[]>(`/clubs/${activeClubId}/courts`),
+          api<CourtBookingItem[]>(`/clubs/${activeClubId}/bookings`),
+          api<{ rows: AttendanceRosterRow[]; roster: any[] }>(`/clubs/${activeClubId}/attendance`),
+          api<{ items: CoachingBookingItem[] }>(`/clubs/${activeClubId}/coaches/bookings?myOnly=true`)
+        ]);
+
+        if (walletRes.status === "fulfilled") setWallet(walletRes.value);
+        if (ratingRes.status === "fulfilled") setRating(ratingRes.value);
+        if (matchesRes.status === "fulfilled") setRecentMatches(matchesRes.value.items || []);
+        if (historyRes.status === "fulfilled") {
+          setHistory(Array.isArray(historyRes.value) ? historyRes.value : []);
+        }
+        if (courtsRes.status === "fulfilled") {
+          setCourts(Array.isArray(courtsRes.value) ? courtsRes.value : []);
+        }
+        if (bookingsRes.status === "fulfilled") {
+          setBookings(Array.isArray(bookingsRes.value) ? bookingsRes.value : []);
+        }
+        if (attendanceRes.status === "fulfilled") {
+          const att = attendanceRes.value;
+          setAttendanceRows(att.rows || []);
+          setCheckedIn(
+            att.roster?.some(
+              (row: any) =>
+                row.member?.userId === me.id &&
+                row.record != null &&
+                ATTENDED.includes(row.record.status)
+            ) ?? false
+          );
+        }
+        if (coachingRes.status === "fulfilled") {
+          setCoachingBookings(coachingRes.value.items || []);
+        }
+
+        if (["OWNER", "ADMIN", "COACH"].includes(activeMembership?.role ?? "")) {
+          try {
+            setAdminStats(await api<AdminStats>(`/clubs/${activeClubId}/dashboard`));
+          } catch {}
+        }
+      } finally {
+        setLoadingClubData(false);
       }
-      try {
-        const g = await api<any[]>("/groups?myOnly=true");
-        setMyGroups(Array.isArray(g) ? g : []);
-      } catch {}
     })();
   }, [me, activeClubId, activeMembership]);
 
   if (!me) return null;
+
+  async function quickCheckIn() {
+    if (!activeClubId) return;
+    try {
+      await api(`/clubs/${activeClubId}/attendance/checkin`, { method: "POST", json: { method: "MANUAL" } });
+      setCheckedIn(true);
+    } catch {}
+  }
+
+  // ── 1. NO CLUB SELECTED VIEW ──
   if (!activeClubId) {
+    const memberships = me.memberships || [];
+
     return (
-      <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/80 p-12 text-center">
-        <h2 className="text-lg font-semibold text-foreground">No Club Selected</h2>
-        <p className="mt-1 text-sm text-muted-foreground">Select or join a club from the top selector to load your cockpit.</p>
+      <div className="space-y-6 max-w-5xl">
+        {/* Welcome Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/60 pb-5">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+              Welcome back, {me.name.split(" ")[0]}
+            </h1>
+            <p className="mt-1 text-xs text-muted-foreground flex items-center gap-1.5">
+              <span>Personal Player Cockpit</span>
+              <span>·</span>
+              <span className="text-amber-500 font-medium">No Active Club Selected</span>
+            </p>
+          </div>
+          <Link href="/clubs/discover">
+            <Button size="sm" className="gap-1.5 text-xs">
+              <Building2 className="h-4 w-4" /> Discover Badminton Clubs
+            </Button>
+          </Link>
+        </div>
+
+        {/* Memberships Selector Card */}
+        <section className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Your Badminton Clubs ({memberships.length})
+            </h2>
+            <Link href="/clubs/discover" className="text-xs text-primary font-medium hover:underline">
+              Find more clubs →
+            </Link>
+          </div>
+
+          {memberships.length === 0 ? (
+            <Card className="p-8 text-center space-y-3 border-dashed">
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                <Building2 className="h-6 w-6" />
+              </div>
+              <h3 className="text-base font-semibold text-foreground">You Haven't Joined a Club Yet</h3>
+              <p className="text-xs text-muted-foreground max-w-md mx-auto">
+                Join a badminton club to book courts, track your Elo rating, log match scores, and sign up for coaching sessions.
+              </p>
+              <div className="pt-1">
+                <Link href="/clubs/discover">
+                  <Button size="sm" className="gap-1.5 text-xs">
+                    Browse Nearby Clubs
+                  </Button>
+                </Link>
+              </div>
+            </Card>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {memberships.map((m) => (
+                <Card
+                  key={m.club.id}
+                  className="p-4 flex flex-col justify-between space-y-3 hover:border-primary/50 transition-all shadow-xs"
+                >
+                  <div>
+                    <div className="flex items-start justify-between gap-2">
+                      <h3 className="font-bold text-sm text-foreground truncate">{m.club.name}</h3>
+                      <Badge tone="primary" className="text-[10px] uppercase font-mono">
+                        {m.role.toLowerCase()}
+                      </Badge>
+                    </div>
+                    {m.club.city && (
+                      <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
+                        <MapPin className="h-3 w-3 text-primary" /> {m.club.city}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="pt-2 border-t border-border/40 flex items-center justify-between">
+                    <span className="text-[10px] font-mono text-muted-foreground uppercase">
+                      Plan: {m.club.subscriptionPlan || "FREE"}
+                    </span>
+                    <Button
+                      size="sm"
+                      onClick={() => setActiveClubId(m.club.id)}
+                      className="h-7 text-xs gap-1"
+                    >
+                      Enter Club <ArrowRight className="h-3 w-3" />
+                    </Button>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* Global Player Profile Card */}
+        <section className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Your Player Profile & Play Style
+            </h2>
+            <Link href="/app/settings" className="text-xs text-primary font-medium hover:underline">
+              Edit in Settings →
+            </Link>
+          </div>
+
+          <Card className="p-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-3.5">
+                <Avatar name={me.name} src={me.photoUrl} size={48} />
+                <div>
+                  <h3 className="text-base font-bold text-foreground">{me.name}</h3>
+                  <p className="text-xs font-mono text-muted-foreground">{me.email || me.mobile || "No contact info"}</p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-2 text-xs">
+                <div className="rounded-lg bg-muted/40 px-3 py-1.5 border border-border/60">
+                  <span className="text-[10px] text-muted-foreground uppercase block font-semibold">Skill Level</span>
+                  <span className="font-semibold text-foreground">{me.skillLevel || "Not set"}</span>
+                </div>
+                <div className="rounded-lg bg-muted/40 px-3 py-1.5 border border-border/60">
+                  <span className="text-[10px] text-muted-foreground uppercase block font-semibold">Play Style</span>
+                  <span className="font-semibold text-foreground">
+                    {me.playingStyle ? me.playingStyle.replace("_", "-") : "All-rounder"}
+                  </span>
+                </div>
+                <div className="rounded-lg bg-muted/40 px-3 py-1.5 border border-border/60">
+                  <span className="text-[10px] text-muted-foreground uppercase block font-semibold">Dominant Hand</span>
+                  <span className="font-semibold text-foreground">{me.dominantHand || "Right"}</span>
+                </div>
+                <div className="rounded-lg bg-muted/40 px-3 py-1.5 border border-border/60">
+                  <span className="text-[10px] text-muted-foreground uppercase block font-semibold">Preferred Time</span>
+                  <span className="font-semibold text-foreground">{me.preferredTime || "Evening"}</span>
+                </div>
+              </div>
+            </div>
+          </Card>
+        </section>
+
+        {/* Cross-Club Play Groups */}
+        <section className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Your Play Groups & Squads ({myGroups.length})
+              </h2>
+              <Badge tone="accent" className="text-[10px]">Cross-Club</Badge>
+            </div>
+            <Link href="/app/groups" className="text-xs text-primary font-medium hover:underline">
+              View all groups →
+            </Link>
+          </div>
+
+          {myGroups.length === 0 ? (
+            <Card className="p-6 text-center text-xs text-muted-foreground space-y-2 border-dashed">
+              <p>You haven't joined any Play Groups yet. Play Groups let you coordinate sessions across different badminton venues.</p>
+              <Link href="/app/groups">
+                <Button size="sm" variant="outline" className="text-xs mt-1">
+                  Explore Play Groups
+                </Button>
+              </Link>
+            </Card>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {myGroups.slice(0, 3).map((g) => (
+                <Link
+                  key={g.id}
+                  href={`/app/groups/${g.id}`}
+                  className="rounded-xl border border-border/60 bg-card p-3.5 text-xs hover:border-primary/40 transition-colors block"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-sm text-foreground truncate">{g.name}</span>
+                    <Badge tone="muted" className="text-[10px]">{g.skillLevel}</Badge>
+                  </div>
+                  <p className="text-muted-foreground text-[11px] mt-1">
+                    {g.city || "Multi-club"} · {g.memberCount} players
+                  </p>
+                </Link>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* Nearby Clubs Bar */}
+        <NearbyClubsBar />
       </div>
     );
   }
 
+  // ── 2. ACTIVE CLUB SELECTED COCKPIT ──
   const isStaff = ["OWNER", "ADMIN", "COACH"].includes(activeMembership?.role ?? "");
   const attendedDays = history.filter((r) => ATTENDED.includes(r.status));
   const ratePct = history.length > 0 ? Math.round((attendedDays.length / history.length) * 100) : 0;
@@ -149,275 +441,343 @@ export default function DashboardPage() {
   }
   const balance = wallet?.wallet?.balance ?? 0;
 
-  async function quickCheckIn() {
-    try {
-      await api(`/clubs/${activeClubId}/attendance/checkin`, { method: "POST", json: { method: "MANUAL" } });
-      setCheckedIn(true);
-    } catch {}
-  }
+  // Real checked in attendance rows today
+  const todayCheckedInRows = attendanceRows.filter((r) => r.status && ATTENDED.includes(r.status));
 
-  // Pre-formatted court slots matching web_dashboard_view.jpg design
-  const defaultCourts = [
-    { id: "c1", name: "Court 1", status: "Occupied", match: "Smith/Jones vs. Brown/Lee", time: "18:45 remaining", players: ["John D.", "Brown L."] },
-    { id: "c2", name: "Court 2", status: "Occupied", match: "Janettes vs. Emily L.", time: "20:25 remaining", players: ["Emh A.", "Mike R."] },
-    { id: "c3", name: "Court 3", status: "Occupied", match: "Open Rally Practice", time: "22:10 remaining", players: ["Sarah L.", "Emily K."] },
-    { id: "c4", name: "Court 4", status: "Available", match: "Available for Booking", time: "Instant Booking Ready", players: [] }
-  ];
+  // Match live bookings with courts
+  const now = new Date();
+  const courtsWithStatus = courts.map((court) => {
+    // Check if court has a booking today around now
+    const activeBooking = bookings.find((b) => {
+      if (b.courtId !== court.id) return false;
+      const start = new Date(b.startTime);
+      const end = new Date(b.endTime);
+      return now >= start && now <= end;
+    });
+    return {
+      ...court,
+      activeBooking,
+      isOccupied: court.status === "OCCUPIED" || Boolean(activeBooking)
+    };
+  });
 
   return (
-    <div className="space-y-6">
-      {/* Top Greeting & Operational Status */}
+    <div className="space-y-6 max-w-5xl">
+      {/* Top Greeting & Check-in Status */}
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border/60 pb-5">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
             Welcome back, {me.name.split(" ")[0]}
           </h1>
-          <p className="mt-1 text-xs text-muted-foreground">
-            {activeMembership?.club.name} · <span className="font-mono uppercase text-primary font-semibold">{activeMembership?.role.toLowerCase()}</span>
+          <p className="mt-1 text-xs text-muted-foreground flex items-center gap-1.5">
+            <span className="font-semibold text-foreground">{activeMembership?.club.name}</span>
+            <span>·</span>
+            <span className="font-mono uppercase text-primary font-semibold">{activeMembership?.role.toLowerCase()}</span>
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           {checkedIn === false && (
-            <Button onClick={quickCheckIn} className="btn-tactile shadow-sm">
-              <CalendarCheck className="h-4 w-4" />
-              Check in now
+            <Button onClick={quickCheckIn} size="sm" className="gap-1.5 text-xs shadow-xs">
+              <CalendarCheck className="h-4 w-4" /> Check In Now
             </Button>
           )}
-          {checkedIn && (
+          {checkedIn === true && (
             <div className="inline-flex items-center gap-1.5 rounded-xl border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary">
               <Check className="h-3.5 w-3.5" />
               <span>Checked in today</span>
             </div>
           )}
+          {checkedIn === null && (
+            <span className="text-xs text-muted-foreground font-mono">Loading attendance…</span>
+          )}
         </div>
       </div>
 
-      {/* COCKPIT ROW 1: Live Court Grid & Quick Member Attendance (per web_dashboard_view.jpg) */}
+      {/* COCKPIT ROW 1: Real Live Court Grid & Real Today Member Attendance */}
       <div className="grid gap-6 lg:grid-cols-12">
-        {/* Live Court Grid (7 cols) */}
-        <div className="rounded-2xl border border-border/80 bg-card/90 p-5 shadow-sm lg:col-span-7">
-          <div className="mb-4 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="relative flex h-2 w-2">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
-              </span>
-              <h2 className="text-sm font-semibold tracking-tight text-foreground">Live Court Grid</h2>
+        {/* Real Live Court Grid (7 cols) */}
+        <div className="rounded-2xl border border-border/80 bg-card p-5 shadow-xs lg:col-span-7 flex flex-col justify-between">
+          <div>
+            <div className="mb-4 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="relative flex h-2 w-2">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
+                </span>
+                <h2 className="text-sm font-semibold tracking-tight text-foreground">
+                  Club Courts Status ({courts.length})
+                </h2>
+              </div>
+              <Link
+                href="/app/courts"
+                className="text-xs font-medium text-primary hover:underline"
+              >
+                Book Court →
+              </Link>
             </div>
-            <Link
-              href="/app/courts"
-              className="rounded-lg border border-border/70 bg-muted/40 px-2.5 py-1 text-xs font-medium text-muted-foreground hover:text-foreground"
-            >
-              All Courts →
-            </Link>
-          </div>
 
-          <div className="grid gap-3 sm:grid-cols-2">
-            {defaultCourts.map((c) => {
-              const isOccupied = c.status === "Occupied";
-              return (
-                <div
-                  key={c.id}
-                  className={`flex flex-col justify-between rounded-xl border p-3.5 transition-all ${
-                    isOccupied
-                      ? "border-primary/30 bg-primary/[0.03]"
-                      : "border-border/60 bg-muted/20"
-                  }`}
-                >
-                  <div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-semibold text-foreground">{c.name}</span>
-                      <span
-                        className={`rounded-md px-2 py-0.5 text-[10px] font-mono font-semibold uppercase ${
-                          isOccupied
-                            ? "bg-primary/15 text-primary"
-                            : "bg-muted text-muted-foreground"
-                        }`}
-                      >
-                        {c.status}
+            {courts.length === 0 ? (
+              <div className="py-8 text-center text-xs text-muted-foreground rounded-xl border border-dashed border-border/60 p-4">
+                <p>No courts have been added to this club yet.</p>
+                {isStaff && (
+                  <Link href="/app/courts" className="text-primary font-medium hover:underline inline-block mt-1">
+                    Add Courts in Court Manager →
+                  </Link>
+                )}
+              </div>
+            ) : (
+              <div className="grid gap-3 sm:grid-cols-2">
+                {courtsWithStatus.slice(0, 6).map((c) => (
+                  <div
+                    key={c.id}
+                    className={`flex flex-col justify-between rounded-xl border p-3 text-xs transition-all ${
+                      c.isOccupied
+                        ? "border-primary/40 bg-primary/[0.04]"
+                        : "border-border/60 bg-muted/20"
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-foreground text-xs">{c.name}</span>
+                        <span
+                          className={`rounded px-1.5 py-0.5 text-[9px] font-mono font-semibold uppercase ${
+                            c.isOccupied
+                              ? "bg-primary/20 text-primary"
+                              : "bg-muted text-muted-foreground"
+                          }`}
+                        >
+                          {c.isOccupied ? "Occupied" : "Available"}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-[11px] text-muted-foreground">
+                        {c.activeBooking?.notes || (c.activeBooking ? "Active player session" : `${c.type || "Synthetic"} Court`)}
+                      </p>
+                    </div>
+
+                    <div className="mt-2.5 flex items-center justify-between border-t border-border/40 pt-2 text-[10px] text-muted-foreground">
+                      <span>{c.hourlyFee ? money(c.hourlyFee) + "/hr" : "Included"}</span>
+                      {!c.isOccupied ? (
+                        <Link href="/app/courts" className="font-semibold text-primary hover:underline">
+                          Book Now
+                        </Link>
+                      ) : (
+                        <span className="font-mono">In session</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Real Quick Member Attendance Today (5 cols) */}
+        <div className="rounded-2xl border border-border/80 bg-card p-5 shadow-xs lg:col-span-5 flex flex-col justify-between">
+          <div>
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-sm font-semibold tracking-tight text-foreground">
+                Today's Check-ins ({todayCheckedInRows.length})
+              </h2>
+              <Link href="/app/attendance" className="text-xs text-primary font-medium hover:underline">
+                Full Matrix →
+              </Link>
+            </div>
+
+            {todayCheckedInRows.length === 0 ? (
+              <div className="py-8 text-center text-xs text-muted-foreground rounded-xl border border-dashed border-border/60 p-4">
+                <p>No players have checked in yet today.</p>
+                <p className="text-[11px] mt-1 text-muted-foreground/80">
+                  Check-ins will appear live here as members arrive at the club.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                {todayCheckedInRows.slice(0, 5).map((member) => (
+                  <div
+                    key={member.userId}
+                    className="flex items-center justify-between rounded-xl border border-border/60 bg-muted/20 p-2.5 text-xs"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <Avatar name={member.name} src={member.photoUrl} size={28} />
+                      <span className="truncate font-medium text-foreground">{member.name}</span>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      {member.checkInTime && (
+                        <span className="font-mono text-[10px] text-muted-foreground">
+                          {new Date(member.checkInTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                        </span>
+                      )}
+                      <span className="rounded px-1.5 py-0.5 text-[9px] font-mono font-medium bg-primary/10 text-primary border border-primary/20">
+                        {member.status === "LATE" ? "Late" : "Present"}
                       </span>
                     </div>
-                    <p className="mt-2 line-clamp-1 text-xs font-medium text-foreground">{c.match}</p>
                   </div>
-
-                  <div className="mt-3 flex items-center justify-between border-t border-border/40 pt-2.5 text-[11px] text-muted-foreground">
-                    <span className="flex items-center gap-1 font-mono">
-                      <Clock className="h-3 w-3" />
-                      {c.time}
-                    </span>
-                    {!isOccupied && (
-                      <Link href="/app/courts" className="font-semibold text-primary hover:underline">
-                        Book
-                      </Link>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Quick Member Attendance Queue (5 cols) */}
-        <div className="rounded-2xl border border-border/80 bg-card/90 p-5 shadow-sm lg:col-span-5">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-sm font-semibold tracking-tight text-foreground">Quick Member Attendance</h2>
-            <Link href="/app/attendance" className="text-xs text-primary font-medium hover:underline">
-              Full Matrix →
-            </Link>
-          </div>
-
-          <div className="space-y-2.5">
-            {[
-              { name: "Rahul Sharma", time: "13:47", status: "Checked in" },
-              { name: "Priya Nair", time: "13:38", status: "Checked in" },
-              { name: "Arjun Verma", time: "13:33", status: "Checked in" },
-              { name: "David Chen", time: "13:40", status: "Pending" }
-            ].map((member, idx) => (
-              <div
-                key={idx}
-                className="flex items-center justify-between rounded-xl border border-border/60 bg-muted/20 p-2.5 text-xs"
-              >
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <Avatar name={member.name} size={28} />
-                  <span className="truncate font-medium text-foreground">{member.name}</span>
-                </div>
-
-                <div className="flex items-center gap-2.5 shrink-0">
-                  <span className="font-mono text-[11px] text-muted-foreground">{member.time}</span>
-                  <span
-                    className={`rounded-md px-2 py-0.5 text-[10px] font-mono font-medium ${
-                      member.status === "Checked in"
-                        ? "border border-primary/20 bg-primary/10 text-primary"
-                        : "border border-border/60 bg-muted/60 text-muted-foreground"
-                    }`}
-                  >
-                    {member.status}
-                  </span>
-                </div>
+                ))}
               </div>
-            ))}
+            )}
           </div>
         </div>
       </div>
 
-      {/* COCKPIT ROW 2: Recent Match Results Ticker & Club Wallet Cashflow (per web_dashboard_view.jpg) */}
+      {/* COCKPIT ROW 2: Real Recent Matches & Real Wallet Cashflow */}
       <div className="grid gap-6 lg:grid-cols-12">
-        {/* Recent Doubles Match Result with Elo Delta (6 cols) */}
-        <div className="rounded-2xl border border-border/80 bg-card/90 p-5 shadow-sm lg:col-span-6">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-sm font-semibold tracking-tight text-foreground">Recent Doubles Match Results</h2>
-            <Link href="/app/matches" className="text-xs text-primary font-medium hover:underline">
-              Log Match →
-            </Link>
-          </div>
+        {/* Real Completed Matches (6 cols) */}
+        <div className="rounded-2xl border border-border/80 bg-card p-5 shadow-xs lg:col-span-6 flex flex-col justify-between">
+          <div>
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-sm font-semibold tracking-tight text-foreground">
+                Recent Completed Matches
+              </h2>
+              <Link href="/app/matches" className="text-xs text-primary font-medium hover:underline">
+                Score Match →
+              </Link>
+            </div>
 
-          <div className="space-y-2">
-            {[
-              { teamA: "Arjun N. & Rahul S.", teamB: "Mike R. & Emily K.", score: "21 - 18", elo: "+18 Elo", isWin: true },
-              { teamA: "Priya V. & Sarah L.", teamB: "David C. & Sam T.", score: "19 - 21", elo: "-14 Elo", isWin: false },
-              { teamA: "Kiran P. & Arjun N.", teamB: "Alex W. & Lin D.", score: "21 - 15", elo: "+12 Elo", isWin: true }
-            ].map((match, idx) => (
-              <div
-                key={idx}
-                className="flex items-center justify-between rounded-xl border border-border/60 bg-muted/20 p-3 text-xs"
-              >
-                <div className="min-w-0 flex-1 pr-3">
-                  <p className="truncate font-semibold text-foreground">{match.teamA}</p>
-                  <p className="truncate text-muted-foreground text-[11px]">vs {match.teamB}</p>
-                </div>
-
-                <div className="flex items-center gap-4 shrink-0">
-                  <span className="font-mono text-xs font-bold tabular-nums text-foreground bg-muted/60 px-2 py-1 rounded-md border border-border/60">
-                    {match.score}
-                  </span>
-                  <span
-                    className={`font-mono text-xs font-semibold tabular-nums ${
-                      match.isWin ? "text-primary" : "text-destructive"
-                    }`}
-                  >
-                    {match.elo}
-                  </span>
-                </div>
+            {recentMatches.length === 0 ? (
+              <div className="py-8 text-center text-xs text-muted-foreground rounded-xl border border-dashed border-border/60 p-4">
+                <p>No completed matches logged yet in this club.</p>
+                <Link href="/app/matches" className="text-primary font-medium hover:underline inline-block mt-1">
+                  Start or Record a Match →
+                </Link>
               </div>
-            ))}
+            ) : (
+              <div className="space-y-2">
+                {recentMatches.slice(0, 4).map((m) => {
+                  const teamAName = m.teams[0]?.players.map((p) => p.user?.name || "Player").join(" & ") || "Team A";
+                  const teamBName = m.teams[1]?.players.map((p) => p.user?.name || "Player").join(" & ") || "Team B";
+                  const scoreLabel = m.scores && m.scores.length > 0
+                    ? m.scores.map((s) => `${s.scoreA}-${s.scoreB}`).join(", ")
+                    : "Final";
+
+                  return (
+                    <div
+                      key={m.id}
+                      className="flex items-center justify-between rounded-xl border border-border/60 bg-muted/20 p-2.5 text-xs"
+                    >
+                      <div className="min-w-0 flex-1 pr-3">
+                        <p className="truncate font-semibold text-foreground">{teamAName}</p>
+                        <p className="truncate text-muted-foreground text-[11px]">vs {teamBName}</p>
+                      </div>
+
+                      <div className="shrink-0 flex items-center gap-2">
+                        <span className="font-mono text-xs font-bold tabular-nums text-foreground bg-muted/60 px-2 py-0.5 rounded border border-border/60">
+                          {scoreLabel}
+                        </span>
+                        <span className="text-[10px] font-mono text-muted-foreground uppercase">
+                          {m.type.toLowerCase()}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Monthly Club Wallet Cashflow (6 cols) */}
-        <div className="rounded-2xl border border-border/80 bg-card/90 p-5 shadow-sm lg:col-span-6">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-sm font-semibold tracking-tight text-foreground">Monthly Club Cashflow</h2>
-            <Link href="/app/wallet" className="text-xs text-primary font-medium hover:underline">
-              Ledger →
-            </Link>
-          </div>
+        {/* Real Club Wallet / Personal Balance (6 cols) */}
+        <div className="rounded-2xl border border-border/80 bg-card p-5 shadow-xs lg:col-span-6 flex flex-col justify-between">
+          <div>
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-sm font-semibold tracking-tight text-foreground">
+                {isStaff ? "Club Treasury Overview" : "Your Club Wallet"}
+              </h2>
+              <Link href="/app/wallet" className="text-xs text-primary font-medium hover:underline">
+                Wallet Ledger →
+              </Link>
+            </div>
 
-          <div className="grid grid-cols-3 gap-3">
-            <div className="rounded-xl border border-border/60 bg-muted/20 p-3 text-center">
-              <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Total Income</span>
-              <p className="mt-1 text-base font-bold font-mono text-primary tabular-nums">
-                {wallet ? money(wallet.monthCredit || 485000) : "₹4,850"}
-              </p>
-            </div>
-            <div className="rounded-xl border border-border/60 bg-muted/20 p-3 text-center">
-              <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Expenses</span>
-              <p className="mt-1 text-base font-bold font-mono text-destructive tabular-nums">
-                {wallet ? money(wallet.monthDebit || 215000) : "₹2,150"}
-              </p>
-            </div>
-            <div className="rounded-xl border border-border/60 bg-muted/20 p-3 text-center">
-              <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Net Balance</span>
-              <p className="mt-1 text-base font-bold font-mono text-foreground tabular-nums">
-                {wallet ? money(balance) : "₹2,700"}
-              </p>
-            </div>
-          </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="rounded-xl border border-border/60 bg-muted/20 p-3 text-center">
+                <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider block">
+                  {isStaff ? "Month Revenue" : "Credits"}
+                </span>
+                <p className="mt-1 text-sm font-bold font-mono text-primary tabular-nums">
+                  {isStaff && adminStats
+                    ? money(adminStats.finance.revenueThisMonth)
+                    : money(wallet?.monthCredit ?? 0)}
+                </p>
+              </div>
 
-          <div className="mt-4 rounded-xl border border-border/50 bg-muted/10 p-3">
-            <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <span>Reserve health:</span>
-              <span className="font-semibold text-foreground">Optimal (100% On-Chain Reconciled)</span>
+              <div className="rounded-xl border border-border/60 bg-muted/20 p-3 text-center">
+                <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider block">
+                  {isStaff ? "Outstanding Dues" : "Pending Fines"}
+                </span>
+                <p className="mt-1 text-sm font-bold font-mono text-destructive tabular-nums">
+                  {isStaff && adminStats
+                    ? money(adminStats.finance.outstandingDues)
+                    : money(wallet?.pendingDues ?? 0)}
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-border/60 bg-muted/20 p-3 text-center">
+                <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider block">
+                  {isStaff ? "Your Balance" : "Wallet Balance"}
+                </span>
+                <p className="mt-1 text-sm font-bold font-mono text-foreground tabular-nums">
+                  {money(balance)}
+                </p>
+              </div>
             </div>
-            <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-muted">
-              <div className="h-full rounded-full bg-primary" style={{ width: "78%" }} />
-            </div>
+
+            {/* Upcoming Coaching Session snippet if user booked any */}
+            {coachingBookings.length > 0 && (
+              <div className="mt-3.5 rounded-xl border border-primary/20 bg-primary/5 p-2.5 text-xs flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Award className="h-4 w-4 text-primary shrink-0" />
+                  <span className="text-muted-foreground">
+                    Next Training: <strong className="text-foreground">{coachingBookings[0].coachName}</strong> ({coachingBookings[0].sessionDate})
+                  </span>
+                </div>
+                <Link href="/app/coaching" className="text-[11px] font-semibold text-primary hover:underline">
+                  View →
+                </Link>
+              </div>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Player Personal Snapshot */}
+      {/* Real Player Personal Snapshot */}
       <section>
-        <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Your Player Snapshot</h2>
+        <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          Your Performance Snapshot
+        </h2>
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           <StatCard
             label="Elo Rating"
-            value={rating ? rating.rating : "1485"}
+            value={rating ? String(Math.round(rating.rating)) : "1000"}
             sub={
-              rating ? (
-                <span className={rating.monthlyDelta >= 0 ? "text-primary font-mono" : "text-destructive font-mono"}>
-                  {rating.monthlyDelta >= 0 ? "+" : ""}
-                  {rating.monthlyDelta.toFixed(0)} this month
+              rating && rating.monthlyDelta !== 0 ? (
+                <span className={rating.monthlyDelta > 0 ? "text-primary font-mono" : "text-destructive font-mono"}>
+                  {rating.monthlyDelta > 0 ? "+" : ""}
+                  {Math.round(rating.monthlyDelta)} this month
                 </span>
               ) : (
-                <span className="text-primary font-mono">+24 this month</span>
+                <span className="text-muted-foreground font-mono">Unrated / Initial</span>
               )
             }
           />
           <StatCard
             label="Wallet Balance"
-            value={wallet ? money(balance) : "₹1,450"}
-            sub={wallet && wallet.pendingDues > 0 ? `${money(wallet.pendingDues)} in fines` : "No pending dues"}
+            value={money(balance)}
+            sub={wallet && wallet.pendingDues > 0 ? `${money(wallet.pendingDues)} pending fines` : "No pending dues"}
           />
           <StatCard
             label="Attendance Rate"
-            value={history.length > 0 ? `${ratePct}%` : "92%"}
-            sub={history.length > 0 ? `${attendedDays.length}/${history.length} sessions · ${streak} day streak` : "14 session streak"}
+            value={history.length > 0 ? `${ratePct}%` : "0%"}
+            sub={
+              history.length > 0
+                ? `${attendedDays.length}/${history.length} sessions attended`
+                : "No check-ins recorded yet"
+            }
           />
           <StatCard
             label="Match Record"
-            value={rating ? `${rating.wins}W – ${rating.losses}L` : "24W – 11L"}
-            sub={rating ? `Peak ${rating.peak} · Win rate ${rating.winRate}%` : "Win rate 68%"}
+            value={rating ? `${rating.wins}W – ${rating.losses}L` : "0W – 0L"}
+            sub={rating && rating.wins + rating.losses > 0 ? `Win rate ${rating.winRate}%` : "No matches played yet"}
           />
         </div>
       </section>
@@ -425,8 +785,8 @@ export default function DashboardPage() {
       {/* Nearby Clubs Bar */}
       <NearbyClubsBar />
 
-      {/* Play Groups Section (Clean, without emojis) */}
-      <section className="rounded-2xl border border-border/80 bg-card/90 p-5 shadow-sm">
+      {/* Play Groups Section */}
+      <section className="rounded-2xl border border-border/80 bg-card p-5 shadow-xs">
         <div className="mb-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <h2 className="text-sm font-semibold text-foreground">Play Groups & Squads</h2>
