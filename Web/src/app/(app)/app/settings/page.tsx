@@ -97,7 +97,8 @@ export default function SettingsPage() {
           skillLevel: f.get("skillLevel") || undefined,
           playingStyle: f.get("playingStyle") || undefined,
           dominantHand: f.get("dominantHand") || undefined,
-          preferredTime: f.get("preferredTime") || undefined
+          preferredTime: f.get("preferredTime") || undefined,
+          showMatchStats: f.get("showMatchStats") === "on"
         }
       });
       await refresh();
@@ -312,6 +313,33 @@ export default function SettingsPage() {
                     <option value="EVENING">Evening</option>
                   </Select>
                 </Field>
+              </div>
+            </div>
+
+            <hr className="border-border/60" />
+
+            <div>
+              <h3 className="text-base font-semibold">Privacy & Match Statistics</h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Control whether fellow club members can view your win and loss records.
+              </p>
+              <div className="mt-4 rounded-xl border border-border/80 bg-background/50 p-4">
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    name="showMatchStats"
+                    defaultChecked={me.showMatchStats !== false}
+                    className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                  />
+                  <div>
+                    <span className="text-sm font-medium text-foreground">
+                      Show wins & losses in Club Members Directory
+                    </span>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      When enabled, other club members can see your club and lifetime match record. Turn off to keep your stats private.
+                    </p>
+                  </div>
+                </label>
               </div>
             </div>
 

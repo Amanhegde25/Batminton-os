@@ -243,6 +243,7 @@ export interface ProfilePatch {
   playingStyle?: string | null;
   dominantHand?: string | null;
   preferredTime?: string | null;
+  showMatchStats?: boolean;
 }
 
 export async function updateProfile(userId: string, patch: ProfilePatch): Promise<SessionUser> {
@@ -258,6 +259,7 @@ export async function updateProfile(userId: string, patch: ProfilePatch): Promis
   if (patch.playingStyle !== undefined) data.playingStyle = patch.playingStyle;
   if (patch.dominantHand !== undefined) data.dominantHand = patch.dominantHand;
   if (patch.preferredTime !== undefined) data.preferredTime = patch.preferredTime;
+  if (patch.showMatchStats !== undefined) data.showMatchStats = Boolean(patch.showMatchStats);
 
   let nextEmail: string | null = current.email;
   if (patch.email !== undefined) {
@@ -323,6 +325,8 @@ export async function updateProfile(userId: string, patch: ProfilePatch): Promis
 }
 
 export async function getMe(user: SessionUser) {
+  const userDoc = await users().findOne({ id: user.id });
+  const sessionUser = userDoc ? toSessionUser(userDoc) : user;
   const memberships = await clubMembers().aggregate([
     { $match: { userId: user.id, status: "ACTIVE", removedAt: null } },
     { $sort: { joinedAt: 1 } },
@@ -340,7 +344,7 @@ export async function getMe(user: SessionUser) {
     { $unwind: "$club" }
   ]).toArray();
   return {
-    ...user,
+    ...sessionUser,
     memberships: memberships.map((m) => ({ role: m.role, joinedAt: m.joinedAt, club: m.club }))
   };
 }
@@ -397,6 +401,7 @@ function toSessionUser(user: any): SessionUser {
     name: user.name,
     photoUrl: user.photoUrl ?? null,
     role: user.role,
-    tokenVersion: user.tokenVersion ?? 0
+    tokenVersion: user.tokenVersion ?? 0,
+    showMatchStats: user.showMatchStats !== false
   };
 }

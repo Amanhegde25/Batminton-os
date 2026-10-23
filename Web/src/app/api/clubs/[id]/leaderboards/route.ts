@@ -7,7 +7,7 @@ import { getLeaderboard } from "@/server/services/leaderboards";
 import type { PeriodKey } from "@/lib/date";
 
 const querySchema = z.object({
-  category: z.string().default("BEST_PLAYER"),
+  category: z.string().default("CLUB_POINTS"),
   period: z.enum(["DAILY", "WEEKLY", "MONTHLY", "YEARLY", "ALL_TIME"]).default("MONTHLY")
 });
 
@@ -30,6 +30,6 @@ function parseQuerySafe(req: Request): z.infer<typeof querySchema> {
   try {
     return querySchema.parse(Object.fromEntries(new URL(req.url).searchParams));
   } catch {
-    return { category: "BEST_PLAYER", period: "MONTHLY" };
+    return { category: "CLUB_POINTS", period: "MONTHLY" };
   }
 }

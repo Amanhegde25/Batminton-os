@@ -25,7 +25,8 @@ import {
   RefreshCw,
   Clock,
   Settings,
-  Award
+  Award,
+  Trophy
 } from "@/components/icons";
 
 interface ClubOverviewData {
@@ -217,7 +218,21 @@ export default function ClubAdminCockpitPage() {
             <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
               Staff Command Panel
             </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
+              <Link href="/app/admin/ranking">
+                <Card className="p-3.5 hover:border-primary/50 transition-all hover:bg-muted/40 cursor-pointer">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-500/10 text-amber-500">
+                      <Trophy className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <div className="text-xs font-semibold">Ranking & Points</div>
+                      <div className="text-[11px] text-muted-foreground">Match & attendance rules</div>
+                    </div>
+                  </div>
+                </Card>
+              </Link>
+
               <Link href="/app/admin/settings">
                 <Card className="p-3.5 hover:border-primary/50 transition-all hover:bg-muted/40 cursor-pointer">
                   <div className="flex items-center gap-3">

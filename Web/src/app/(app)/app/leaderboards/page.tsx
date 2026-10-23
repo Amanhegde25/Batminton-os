@@ -14,7 +14,8 @@ import {
   Flame,
   Handshake,
   Medal,
-  ShuttlecockIcon
+  ShuttlecockIcon,
+  Trophy
 } from "@/components/icons";
 
 interface Entry {
@@ -27,6 +28,7 @@ interface Entry {
 }
 
 const CATEGORIES = [
+  { key: "CLUB_POINTS", label: "Club Points (Ranking)", icon: Trophy },
   { key: "BEST_PLAYER", label: "Best Player", icon: Award },
   { key: "MOST_IMPROVED", label: "Most Improved", icon: Rocket },
   { key: "HIGHEST_RATING", label: "Highest Rating", icon: Crown },
@@ -66,7 +68,7 @@ function RankBadge({ rank }: { rank: number }) {
 
 function LeaderboardsInner() {
   const { activeClubId } = useSession();
-  const [category, setCategory] = useState("BEST_PLAYER");
+  const [category, setCategory] = useState("CLUB_POINTS");
   const [period, setPeriod] = useState("MONTHLY");
   const [rows, setRows] = useState<Entry[]>([]);
   const [loading, setLoading] = useState(true);

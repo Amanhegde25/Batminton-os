@@ -21,7 +21,8 @@ const patchSchema = z.object({
   skillLevel: z.enum(["BEGINNER", "INTERMEDIATE", "ADVANCED", "PROFESSIONAL"]).optional().nullable(),
   playingStyle: z.enum(["ATTACKING_SMASH", "DEFENSIVE_CLEAR", "ALL_ROUND", "NET_PLAYER", "DECEPTIVE"]).optional().nullable(),
   dominantHand: z.enum(["RIGHT", "LEFT"]).optional().nullable(),
-  preferredTime: z.enum(["MORNING", "AFTERNOON", "EVENING", "NIGHT"]).optional().nullable()
+  preferredTime: z.enum(["MORNING", "AFTERNOON", "EVENING", "NIGHT"]).optional().nullable(),
+  showMatchStats: z.boolean().optional()
 });
 
 export const PATCH = handler(async (req) => {

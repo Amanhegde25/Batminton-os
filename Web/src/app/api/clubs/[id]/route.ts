@@ -66,7 +66,15 @@ const patchSchema = z.object({
         .optional(),
       booking: z.object({ cancellationWindowMinutes: z.number().min(0).max(1440).optional() }).optional(),
       membership: z.object({ monthlyFee: z.number().min(0).optional(), autoApprove: z.boolean().optional() }).optional(),
-      matchmaking: z.object({ allowAbsent: z.boolean().optional() }).optional()
+      matchmaking: z.object({ allowAbsent: z.boolean().optional() }).optional(),
+      pointsConfig: z
+        .object({
+          winPoints: z.number().optional(),
+          lossPoints: z.number().optional(),
+          attendancePoints: z.number().optional(),
+          absencePoints: z.number().optional()
+        })
+        .optional()
     })
     .optional()
 });

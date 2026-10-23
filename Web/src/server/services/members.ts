@@ -1,10 +1,82 @@
-import { clubs, clubMembers, users, playerRatings, wallets } from "@/server/db";
+import { clubs, clubMembers, users, playerRatings, wallets, matchPlayers, attendanceRecords } from "@/server/db";
 import { ApiError } from "@/lib/api";
-import { AUDIT_ACTIONS, MANAGER_ROLES } from "@/lib/constants";
+import { AUDIT_ACTIONS, MANAGER_ROLES, parseClubSettings, DEFAULT_CLUB_POINTS_CONFIG } from "@/lib/constants";
 import { audit } from "./audit";
 import { notify } from "./notifications";
 import type { SessionUser } from "@/server/auth/types";
 import { cuid } from "@/lib/id";
+
+export async function getMembersStats(memberUserIds: string[], clubId: string) {
+  if (memberUserIds.length === 0) {
+    return new Map<string, { clubWins: number; clubLosses: number; lifetimeWins: number; lifetimeLosses: number }>();
+  }
+
+  const stats = await matchPlayers().aggregate([
+    { $match: { userId: { $in: memberUserIds } } },
+    {
+      $lookup: {
+        from: "matchTeams",
+        let: { teamId: "$teamId" },
+        pipeline: [
+          { $match: { $expr: { $eq: ["$id", "$$teamId"] } } },
+          { $project: { teamIndex: 1 } }
+        ],
+        as: "team"
+      }
+    },
+    { $unwind: "$team" },
+    {
+      $lookup: {
+        from: "matches",
+        let: { matchId: "$matchId" },
+        pipeline: [
+          {
+            $match: {
+              $expr: {
+                $and: [
+                  { $eq: ["$id", "$$matchId"] },
+                  { $eq: ["$deletedAt", null] },
+                  { $in: ["$status", ["COMPLETED", "WALKOVER"]] },
+                  { $ne: ["$winnerTeamIndex", null] }
+                ]
+              }
+            }
+          },
+          { $project: { clubId: 1, winnerTeamIndex: 1 } }
+        ],
+        as: "match"
+      }
+    },
+    { $unwind: "$match" },
+    {
+      $project: {
+        userId: 1,
+        isClubMatch: { $eq: ["$match.clubId", clubId] },
+        isWin: { $eq: ["$team.teamIndex", "$match.winnerTeamIndex"] }
+      }
+    },
+    {
+      $group: {
+        _id: "$userId",
+        lifetimeWins: { $sum: { $cond: ["$isWin", 1, 0] } },
+        lifetimeLosses: { $sum: { $cond: ["$isWin", 0, 1] } },
+        clubWins: { $sum: { $cond: [{ $and: ["$isClubMatch", "$isWin"] }, 1, 0] } },
+        clubLosses: { $sum: { $cond: [{ $and: ["$isClubMatch", { $not: "$isWin" }] }, 1, 0] } }
+      }
+    }
+  ]).toArray();
+
+  const map = new Map<string, { clubWins: number; clubLosses: number; lifetimeWins: number; lifetimeLosses: number }>();
+  for (const s of stats) {
+    map.set(s._id as string, {
+      clubWins: (s.clubWins as number) ?? 0,
+      clubLosses: (s.clubLosses as number) ?? 0,
+      lifetimeWins: (s.lifetimeWins as number) ?? 0,
+      lifetimeLosses: (s.lifetimeLosses as number) ?? 0
+    });
+  }
+  return map;
+}
 
 export async function listMembers(clubId: string, q?: string, status?: string) {
   const filter: Record<string, unknown> = { clubId };
@@ -26,20 +98,45 @@ export async function listMembers(clubId: string, q?: string, status?: string) {
   const members = await clubMembers().find(filter).sort({ status: 1, joinedAt: 1 }).toArray();
   const memberUserIds = members.map((m) => m.userId as string);
 
-  const [memberUsers, ratings, walletsData] = await Promise.all([
+  const [memberUsers, ratings, walletsData, memberStats, clubDoc, attSummary] = await Promise.all([
     users().find({ id: { $in: memberUserIds } }, {
-      projection: { id: 1, name: 1, email: 1, mobile: 1, photoUrl: 1, skillLevel: 1, _id: 0 }
+      projection: { id: 1, name: 1, email: 1, mobile: 1, photoUrl: 1, skillLevel: 1, showMatchStats: 1, _id: 0 }
     }).toArray(),
     playerRatings().find({ clubId }).toArray(),
-    wallets().find({ clubId }).toArray()
+    wallets().find({ clubId }).toArray(),
+    getMembersStats(memberUserIds, clubId),
+    clubs().findOne({ id: clubId, deletedAt: null }),
+    attendanceRecords().aggregate([
+      { $match: { clubId, userId: { $in: memberUserIds } } },
+      {
+        $group: {
+          _id: "$userId",
+          present: { $sum: { $cond: [{ $in: ["$status", ["PRESENT", "LATE"]] }, 1, 0] } },
+          absent: { $sum: { $cond: [{ $eq: ["$status", "ABSENT"] }, 1, 0] } }
+        }
+      }
+    ]).toArray()
   ]);
+
+  const clubSettings = parseClubSettings(clubDoc?.settings as string);
+  const cfg = clubSettings.pointsConfig ?? DEFAULT_CLUB_POINTS_CONFIG;
+  const attMap = new Map(attSummary.map((a) => [a._id as string, { present: (a.present as number) ?? 0, absent: (a.absent as number) ?? 0 }]));
 
   const userMap = new Map(memberUsers.map((u) => [u.id, u]));
   const ratingMap = new Map(ratings.map((r) => [r.userId, r]));
   const walletMap = new Map(walletsData.map((w) => [w.userId, w]));
 
   return members.map((m) => {
-    const u = userMap.get(m.userId as string) ?? { id: m.userId, name: "Unknown", email: "", mobile: null, photoUrl: null, skillLevel: null };
+    const u = userMap.get(m.userId as string) ?? { id: m.userId, name: "Unknown", email: "", mobile: null, photoUrl: null, skillLevel: null, showMatchStats: true };
+    const stats = memberStats.get(m.userId as string) ?? { clubWins: 0, clubLosses: 0, lifetimeWins: 0, lifetimeLosses: 0 };
+    const att = attMap.get(m.userId as string) ?? { present: 0, absent: 0 };
+    const showStats = u.showMatchStats !== false;
+    const clubPoints =
+      stats.clubWins * cfg.winPoints +
+      stats.clubLosses * cfg.lossPoints +
+      att.present * cfg.attendancePoints +
+      att.absent * cfg.absencePoints;
+
     return {
       id: m.id,
       userId: m.userId,
@@ -55,7 +152,13 @@ export async function listMembers(clubId: string, q?: string, status?: string) {
       rating: (ratingMap.get(m.userId as string)?.rating as number) ?? 1000,
       balance: (walletMap.get(m.userId as string)?.balance as number) ?? 0,
       walletBalance: (walletMap.get(m.userId as string)?.balance as number) ?? 0,
-      attendanceRate: 100
+      attendanceRate: 100,
+      showStats,
+      clubWins: showStats ? stats.clubWins : null,
+      clubLosses: showStats ? stats.clubLosses : null,
+      lifetimeWins: showStats ? stats.lifetimeWins : null,
+      lifetimeLosses: showStats ? stats.lifetimeLosses : null,
+      clubPoints: showStats ? clubPoints : null
     };
   });
 }

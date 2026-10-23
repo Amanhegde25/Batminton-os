@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useSession } from "@/components/session";
 import { api } from "@/lib/client";
 import {
@@ -25,9 +26,12 @@ import {
   Sliders,
   Shield,
   CheckCircle2,
-  FileText
+  FileText,
+  Trophy,
+  RotateCcw,
+  ArrowRight
 } from "@/components/icons";
-import { SPORTS, DEFAULT_CLUB_SETTINGS, type ClubSettings } from "@/lib/constants";
+import { SPORTS, DEFAULT_CLUB_SETTINGS, DEFAULT_CLUB_POINTS_CONFIG, type ClubSettings } from "@/lib/constants";
 
 interface ClubDetailsResponse {
   id: string;
@@ -52,7 +56,9 @@ interface AuditLogItem {
 
 export default function ClubAdminSettingsPage() {
   const { activeClubId, refresh } = useSession();
-  const [tab, setTab] = useState("profile");
+  const searchParams = useSearchParams();
+  const initialTab = searchParams.get("tab");
+  const [tab, setTab] = useState(initialTab === "ranking" ? "ranking" : "profile");
   const [loadingClub, setLoadingClub] = useState(true);
   const [saving, setSaving] = useState(false);
   const [detectingGps, setDetectingGps] = useState(false);
@@ -104,6 +110,12 @@ export default function ClubAdminSettingsPage() {
         },
         matchmaking: {
           allowAbsent: Boolean(data.settings?.matchmaking?.allowAbsent ?? false)
+        },
+        pointsConfig: {
+          winPoints: typeof data.settings?.pointsConfig?.winPoints === "number" ? data.settings.pointsConfig.winPoints : (DEFAULT_CLUB_SETTINGS.pointsConfig?.winPoints ?? 1),
+          lossPoints: typeof data.settings?.pointsConfig?.lossPoints === "number" ? data.settings.pointsConfig.lossPoints : (DEFAULT_CLUB_SETTINGS.pointsConfig?.lossPoints ?? -1),
+          attendancePoints: typeof data.settings?.pointsConfig?.attendancePoints === "number" ? data.settings.pointsConfig.attendancePoints : (DEFAULT_CLUB_SETTINGS.pointsConfig?.attendancePoints ?? 1),
+          absencePoints: typeof data.settings?.pointsConfig?.absencePoints === "number" ? data.settings.pointsConfig.absencePoints : (DEFAULT_CLUB_SETTINGS.pointsConfig?.absencePoints ?? 0)
         }
       });
     } catch (err) {
@@ -228,6 +240,7 @@ export default function ClubAdminSettingsPage() {
           { key: "profile", label: "Profile & Identity" },
           { key: "schedule", label: "Hours & Location" },
           { key: "policies", label: "Rules & Policies" },
+          { key: "ranking", label: "Club Ranking Points" },
           { key: "audit", label: "Audit Logs" }
         ]}
         active={tab}
@@ -494,6 +507,30 @@ export default function ClubAdminSettingsPage() {
 
       {tab === "policies" && (
         <form onSubmit={handleSave} className="space-y-5">
+          {/* Club Ranking Points Banner */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl border border-primary/30 bg-primary/5">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 shrink-0 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+                <Trophy className="h-5 w-5" />
+              </div>
+              <div>
+                <h4 className="text-xs font-bold text-foreground">Club Ranking & Points Configuration</h4>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  Points awarded or deducted for winning, losing, attendance, and absence. Current: +{settings.pointsConfig?.winPoints ?? 1} win, {settings.pointsConfig?.lossPoints ?? -1} loss, +{settings.pointsConfig?.attendancePoints ?? 1} attendance.
+                </p>
+              </div>
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => setTab("ranking")}
+              className="gap-1.5 text-xs shrink-0 self-start sm:self-center"
+            >
+              Configure Ranking Points <ArrowRight className="h-3 w-3" />
+            </Button>
+          </div>
+
           {/* Attendance Policies */}
           <Card className="p-5 sm:p-6 space-y-5">
             <div className="border-b border-border/50 pb-3">
@@ -657,6 +694,204 @@ export default function ClubAdminSettingsPage() {
             <Button type="submit" disabled={saving} className="gap-1.5 text-xs">
               {saving ? <Spinner className="h-3.5 w-3.5" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
               {saving ? "Saving…" : "Save Policies"}
+            </Button>
+          </div>
+        </form>
+      )}
+
+      {tab === "ranking" && (
+        <form onSubmit={handleSave} className="space-y-5">
+          <Card className="p-5 sm:p-6 space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/50 pb-4">
+              <div>
+                <h3 className="text-sm font-semibold flex items-center gap-2 text-foreground">
+                  <Trophy className="h-4 w-4 text-primary" /> Club Ranking & Points Configuration
+                </h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Configure points gained or lost for match outcomes and session attendance. These determine official player rankings.
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setSettings({
+                    ...settings,
+                    pointsConfig: {
+                      winPoints: 1,
+                      lossPoints: -1,
+                      attendancePoints: 1,
+                      absencePoints: 0
+                    }
+                  });
+                  toast("Reset points system to defaults (+1 win, -1 loss, +1 attendance, 0 absence)");
+                }}
+                className="gap-1.5 text-xs shrink-0"
+              >
+                <RotateCcw className="h-3.5 w-3.5" /> Reset to Defaults
+              </Button>
+            </div>
+
+            {/* 4 Points Inputs */}
+            <div className="grid gap-5 sm:grid-cols-2">
+              <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">
+                    Match Win Points
+                  </span>
+                  <Badge tone="success" className="text-[11px] font-mono">
+                    {settings.pointsConfig?.winPoints ?? 1} pts
+                  </Badge>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Points awarded to players when winning a match.
+                </p>
+                <Input
+                  type="number"
+                  step="1"
+                  value={settings.pointsConfig?.winPoints ?? 1}
+                  onChange={(e) =>
+                    setSettings({
+                      ...settings,
+                      pointsConfig: {
+                        winPoints: e.target.value === "" ? 0 : Number(e.target.value),
+                        lossPoints: settings.pointsConfig?.lossPoints ?? -1,
+                        attendancePoints: settings.pointsConfig?.attendancePoints ?? 1,
+                        absencePoints: settings.pointsConfig?.absencePoints ?? 0
+                      }
+                    })
+                  }
+                  className="font-mono text-sm"
+                />
+                <span className="text-[10px] text-muted-foreground">Default: +1 point</span>
+              </div>
+
+              <div className="rounded-xl border border-rose-500/30 bg-rose-500/5 p-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-rose-700 dark:text-rose-400">
+                    Match Loss Points
+                  </span>
+                  <Badge tone="danger" className="text-[11px] font-mono">
+                    {settings.pointsConfig?.lossPoints ?? -1} pts
+                  </Badge>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Points deducted (or awarded) when losing a match.
+                </p>
+                <Input
+                  type="number"
+                  step="1"
+                  value={settings.pointsConfig?.lossPoints ?? -1}
+                  onChange={(e) =>
+                    setSettings({
+                      ...settings,
+                      pointsConfig: {
+                        winPoints: settings.pointsConfig?.winPoints ?? 1,
+                        lossPoints: e.target.value === "" ? 0 : Number(e.target.value),
+                        attendancePoints: settings.pointsConfig?.attendancePoints ?? 1,
+                        absencePoints: settings.pointsConfig?.absencePoints ?? 0
+                      }
+                    })
+                  }
+                  className="font-mono text-sm"
+                />
+                <span className="text-[10px] text-muted-foreground">Default: -1 point</span>
+              </div>
+
+              <div className="rounded-xl border border-blue-500/30 bg-blue-500/5 p-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-blue-700 dark:text-blue-400">
+                    Attendance / Check-in Points
+                  </span>
+                  <Badge tone="primary" className="text-[11px] font-mono">
+                    {settings.pointsConfig?.attendancePoints ?? 1} pts
+                  </Badge>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Points awarded when a member is marked present for a club session.
+                </p>
+                <Input
+                  type="number"
+                  step="1"
+                  value={settings.pointsConfig?.attendancePoints ?? 1}
+                  onChange={(e) =>
+                    setSettings({
+                      ...settings,
+                      pointsConfig: {
+                        winPoints: settings.pointsConfig?.winPoints ?? 1,
+                        lossPoints: settings.pointsConfig?.lossPoints ?? -1,
+                        attendancePoints: e.target.value === "" ? 0 : Number(e.target.value),
+                        absencePoints: settings.pointsConfig?.absencePoints ?? 0
+                      }
+                    })
+                  }
+                  className="font-mono text-sm"
+                />
+                <span className="text-[10px] text-muted-foreground">Default: +1 point</span>
+              </div>
+
+              <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-amber-700 dark:text-amber-400">
+                    Failed Attendance / Absence Points
+                  </span>
+                  <Badge tone="muted" className="text-[11px] font-mono">
+                    {settings.pointsConfig?.absencePoints ?? 0} pts
+                  </Badge>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Points applied when a player fails attendance or is absent during daily sweep.
+                </p>
+                <Input
+                  type="number"
+                  step="1"
+                  value={settings.pointsConfig?.absencePoints ?? 0}
+                  onChange={(e) =>
+                    setSettings({
+                      ...settings,
+                      pointsConfig: {
+                        winPoints: settings.pointsConfig?.winPoints ?? 1,
+                        lossPoints: settings.pointsConfig?.lossPoints ?? -1,
+                        attendancePoints: settings.pointsConfig?.attendancePoints ?? 1,
+                        absencePoints: e.target.value === "" ? 0 : Number(e.target.value)
+                      }
+                    })
+                  }
+                  className="font-mono text-sm"
+                />
+                <span className="text-[10px] text-muted-foreground">Default: 0 points</span>
+              </div>
+            </div>
+
+            {/* Live Calculation Preview Card */}
+            <div className="rounded-xl border border-border/60 bg-muted/30 p-4 space-y-2.5">
+              <h4 className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                <Sliders className="h-3.5 w-3.5 text-primary" /> Live Formula & Ranking Preview
+              </h4>
+              <p className="text-[11px] text-muted-foreground">
+                Total Club Points = (Wins × {settings.pointsConfig?.winPoints ?? 1}) + (Losses × {settings.pointsConfig?.lossPoints ?? -1}) + (Attended × {settings.pointsConfig?.attendancePoints ?? 1}) + (Absences × {settings.pointsConfig?.absencePoints ?? 0})
+              </p>
+              <div className="p-3 rounded-lg bg-background border border-border/40 text-xs">
+                <span className="text-muted-foreground">Sample Scenario (8 wins, 3 losses, 12 attendances, 1 absence):</span>
+                <p className="font-semibold text-foreground mt-1">
+                  8 × ({settings.pointsConfig?.winPoints ?? 1}) + 3 × ({settings.pointsConfig?.lossPoints ?? -1}) + 12 × ({settings.pointsConfig?.attendancePoints ?? 1}) + 1 × ({settings.pointsConfig?.absencePoints ?? 0}) ={" "}
+                  <span className="text-primary font-bold text-sm">
+                    {8 * (settings.pointsConfig?.winPoints ?? 1) +
+                      3 * (settings.pointsConfig?.lossPoints ?? -1) +
+                      12 * (settings.pointsConfig?.attendancePoints ?? 1) +
+                      1 * (settings.pointsConfig?.absencePoints ?? 0)}{" "}
+                    Club Points
+                  </span>
+                </p>
+              </div>
+            </div>
+          </Card>
+
+          <div className="flex justify-end">
+            <Button type="submit" disabled={saving} className="gap-1.5 text-xs">
+              {saving ? <Spinner className="h-3.5 w-3.5" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+              {saving ? "Saving…" : "Save Ranking Points"}
             </Button>
           </div>
         </form>

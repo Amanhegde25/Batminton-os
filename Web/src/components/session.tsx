@@ -26,6 +26,7 @@ export interface Me {
   playingStyle?: string | null;
   dominantHand?: string | null;
   preferredTime?: string | null;
+  showMatchStats?: boolean;
   memberships: { role: string; joinedAt: string; club: MeClub }[];
 }
 

@@ -14,11 +14,13 @@ import {
   BarChart3,
   ArrowLeft,
   Settings,
-  Award
+  Award,
+  Trophy
 } from "@/components/icons";
 
 const CLUB_ADMIN_TABS = [
   { href: "/app/admin", label: "Cockpit", icon: LayoutDashboard },
+  { href: "/app/admin/ranking", label: "Ranking & Points", icon: Trophy },
   { href: "/app/admin/settings", label: "Club Settings", icon: Settings },
   { href: "/app/admin/coaching", label: "Coaches & Schedule", icon: Award },
   { href: "/app/admin/members", label: "Approvals & Roles", icon: Users },

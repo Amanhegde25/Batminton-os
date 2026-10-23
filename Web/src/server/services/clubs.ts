@@ -162,6 +162,12 @@ function mergeSettings(base: ClubSettings, patch: DeepPartial<ClubSettings>): Cl
     membership: { ...base.membership, ...(patch.membership ?? {}) },
     matchmaking: {
       allowAbsent: patch.matchmaking?.allowAbsent ?? base.matchmaking?.allowAbsent ?? false
+    },
+    pointsConfig: {
+      winPoints: typeof patch.pointsConfig?.winPoints === "number" ? patch.pointsConfig.winPoints : (base.pointsConfig?.winPoints ?? 1),
+      lossPoints: typeof patch.pointsConfig?.lossPoints === "number" ? patch.pointsConfig.lossPoints : (base.pointsConfig?.lossPoints ?? -1),
+      attendancePoints: typeof patch.pointsConfig?.attendancePoints === "number" ? patch.pointsConfig.attendancePoints : (base.pointsConfig?.attendancePoints ?? 1),
+      absencePoints: typeof patch.pointsConfig?.absencePoints === "number" ? patch.pointsConfig.absencePoints : (base.pointsConfig?.absencePoints ?? 0)
     }
   };
 }
@@ -216,7 +222,26 @@ export async function listPublicClubs(q?: string, userId?: string, options?: Lis
     ];
   }
 
-  const rawClubs = await clubs().find(filter).sort({ createdAt: -1 }).limit(60).toArray();
+  let rawClubs;
+  if (options?.lat != null && options?.lng != null) {
+    rawClubs = await clubs()
+      .find({ ...filter, lat: { $ne: null }, lng: { $ne: null } })
+      .limit(60)
+      .toArray();
+    if (rawClubs.length === 0) {
+      rawClubs = await clubs().find(filter).sort({ createdAt: -1 }).limit(60).toArray();
+    }
+  } else if (options?.city) {
+    const cityRegex = { $regex: options.city.trim(), $options: "i" };
+    const matching = await clubs().find({ ...filter, city: cityRegex }).limit(60).toArray();
+    if (matching.length > 0) {
+      rawClubs = matching;
+    } else {
+      rawClubs = await clubs().find(filter).sort({ createdAt: -1 }).limit(60).toArray();
+    }
+  } else {
+    rawClubs = await clubs().find(filter).sort({ createdAt: -1 }).limit(60).toArray();
+  }
 
   // Count members and courts for each club
   const clubIds = rawClubs.map((c) => c.id as string);

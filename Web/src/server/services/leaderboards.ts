@@ -1,8 +1,10 @@
-import { playerRatings, attendanceRecords, ratingHistories, matches, matchTeams, matchPlayers, clubMembers } from "@/server/db";
+import { clubs, playerRatings, attendanceRecords, ratingHistories, matches, matchTeams, matchPlayers, clubMembers } from "@/server/db";
 import { dayKey, periodRange, type PeriodKey } from "@/lib/date";
 import { computeStreaks } from "@/lib/engines/stats";
+import { parseClubSettings, DEFAULT_CLUB_POINTS_CONFIG } from "@/lib/constants";
 
 export const LEADERBOARD_CATEGORIES = [
+  "CLUB_POINTS",
   "BEST_PLAYER",
   "MOST_IMPROVED",
   "HIGHEST_RATING",
@@ -29,6 +31,112 @@ export async function getLeaderboard(
   period: PeriodKey
 ): Promise<LeaderboardEntry[]> {
   const { from } = periodRange(period);
+
+  if (category === "CLUB_POINTS") {
+    const clubDoc = await clubs().findOne({ id: clubId, deletedAt: null });
+    const settings = parseClubSettings(clubDoc?.settings as string);
+    const cfg = settings.pointsConfig ?? DEFAULT_CLUB_POINTS_CONFIG;
+
+    const matchFilter: Record<string, unknown> = {
+      clubId,
+      status: { $in: ["COMPLETED", "WALKOVER"] }
+    };
+    if (from) matchFilter.endedAt = { $gte: from };
+    const allMatches = await matches().find(matchFilter).toArray();
+    const matchIds = allMatches.map((m) => m.id as string);
+    const allTeams = matchIds.length > 0 ? await matchTeams().find({ matchId: { $in: matchIds } }).toArray() : [];
+    const allPlayers = matchIds.length > 0 ? await matchPlayers().find({ matchId: { $in: matchIds } }).toArray() : [];
+
+    interface Stat {
+      wins: number;
+      losses: number;
+      present: number;
+      absent: number;
+    }
+    const map = new Map<string, Stat>();
+    const getStat = (uid: string): Stat => {
+      let s = map.get(uid);
+      if (!s) {
+        s = { wins: 0, losses: 0, present: 0, absent: 0 };
+        map.set(uid, s);
+      }
+      return s;
+    };
+
+    for (const m of allMatches) {
+      const winnerIdx = (m.winnerTeamIndex as number) ?? -1;
+      if (winnerIdx === -1) continue;
+      const mTeams = allTeams.filter((t) => t.matchId === m.id);
+      for (const t of mTeams) {
+        const won = (t.teamIndex as number) === winnerIdx;
+        const tPlayers = allPlayers.filter((p) => p.teamId === t.id);
+        for (const p of tPlayers) {
+          const s = getStat(p.userId as string);
+          if (won) s.wins += 1;
+          else s.losses += 1;
+        }
+      }
+    }
+
+    const attFilter: Record<string, unknown> = { clubId };
+    if (from) attFilter.day = { $gte: dayKey(from) };
+    const allAtt = await attendanceRecords().find(attFilter).toArray();
+    for (const a of allAtt) {
+      const s = getStat(a.userId as string);
+      if (a.status === "PRESENT" || a.status === "LATE") {
+        s.present += 1;
+      } else if (a.status === "ABSENT") {
+        s.absent += 1;
+      }
+    }
+
+    const activeMembers = await clubMembers().find({ clubId, status: "ACTIVE" }).toArray();
+    for (const m of activeMembers) {
+      getStat(m.userId as string);
+    }
+
+    const activeUserSet = new Set(activeMembers.map((m) => m.userId as string));
+    const candidateIds = [...map.keys()].filter((uid) => activeUserSet.has(uid));
+    const usersMap = await usersFor(clubId, candidateIds);
+
+    const entries: LeaderboardEntry[] = candidateIds.map((uid) => {
+      const s = map.get(uid)!;
+      const points =
+        s.wins * cfg.winPoints +
+        s.losses * cfg.lossPoints +
+        s.present * cfg.attendancePoints +
+        s.absent * cfg.absencePoints;
+
+      const breakdownParts: string[] = [
+        `${s.wins}W`,
+        `${s.losses}L`,
+        `${s.present} attended`
+      ];
+      if (s.absent > 0) {
+        breakdownParts.push(`${s.absent} absent`);
+      }
+
+      return {
+        userId: uid,
+        name: usersMap[uid]?.name ?? "Unknown",
+        photoUrl: usersMap[uid]?.photoUrl ?? null,
+        value: points,
+        display: `${points} pt${Math.abs(points) === 1 ? "" : "s"}`,
+        meta: breakdownParts.join(" · ")
+      };
+    });
+
+    entries.sort((a, b) => {
+      if (b.value !== a.value) return b.value - a.value;
+      const sA = map.get(a.userId)!;
+      const sB = map.get(b.userId)!;
+      if (sB.wins !== sA.wins) return sB.wins - sA.wins;
+      if (sB.present !== sA.present) return sB.present - sA.present;
+      return sA.losses - sB.losses;
+    });
+
+    return entries.slice(0, 50);
+  }
 
   if (category === "HIGHEST_RATING") {
     const ratings = await playerRatings().aggregate([

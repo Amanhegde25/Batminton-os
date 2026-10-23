@@ -172,6 +172,20 @@ export const NOTIFICATION_TYPES = {
   ANNOUNCEMENT: "ANNOUNCEMENT"
 } as const;
 
+export interface ClubPointsConfig {
+  winPoints: number;
+  lossPoints: number;
+  attendancePoints: number;
+  absencePoints: number;
+}
+
+export const DEFAULT_CLUB_POINTS_CONFIG: ClubPointsConfig = {
+  winPoints: 1,
+  lossPoints: -1,
+  attendancePoints: 1,
+  absencePoints: 0
+};
+
 export interface ClubSettings {
   sport: string;
   openingTime?: string;
@@ -191,6 +205,7 @@ export interface ClubSettings {
   matchmaking?: {
     allowAbsent: boolean;
   };
+  pointsConfig?: ClubPointsConfig;
 }
 
 export const DEFAULT_CLUB_SETTINGS: ClubSettings = {
@@ -211,7 +226,8 @@ export const DEFAULT_CLUB_SETTINGS: ClubSettings = {
   membership: { monthlyFee: 0, autoApprove: true },
   matchmaking: {
     allowAbsent: false
-  }
+  },
+  pointsConfig: DEFAULT_CLUB_POINTS_CONFIG
 };
 
 export function parseClubSettings(raw: string | null | undefined): ClubSettings {
@@ -230,7 +246,13 @@ export function parseClubSettings(raw: string | null | undefined): ClubSettings 
     attendance: { ...DEFAULT_CLUB_SETTINGS.attendance, ...(parsed.attendance ?? {}) },
     booking: { ...DEFAULT_CLUB_SETTINGS.booking, ...(parsed.booking ?? {}) },
     membership: { ...DEFAULT_CLUB_SETTINGS.membership, ...(parsed.membership ?? {}) },
-    matchmaking: { ...DEFAULT_CLUB_SETTINGS.matchmaking, ...(parsed.matchmaking ?? {}) }
+    matchmaking: { ...DEFAULT_CLUB_SETTINGS.matchmaking, ...(parsed.matchmaking ?? {}) },
+    pointsConfig: {
+      winPoints: typeof parsed.pointsConfig?.winPoints === "number" ? parsed.pointsConfig.winPoints : DEFAULT_CLUB_POINTS_CONFIG.winPoints,
+      lossPoints: typeof parsed.pointsConfig?.lossPoints === "number" ? parsed.pointsConfig.lossPoints : DEFAULT_CLUB_POINTS_CONFIG.lossPoints,
+      attendancePoints: typeof parsed.pointsConfig?.attendancePoints === "number" ? parsed.pointsConfig.attendancePoints : DEFAULT_CLUB_POINTS_CONFIG.attendancePoints,
+      absencePoints: typeof parsed.pointsConfig?.absencePoints === "number" ? parsed.pointsConfig.absencePoints : DEFAULT_CLUB_POINTS_CONFIG.absencePoints
+    }
   };
 }
 

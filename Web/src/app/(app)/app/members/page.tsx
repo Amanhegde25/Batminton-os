@@ -18,12 +18,18 @@ interface MemberRow {
   balance: number;
   attendanceRate: number;
   joinedAt: string;
+  showStats?: boolean;
+  clubWins?: number | null;
+  clubLosses?: number | null;
+  lifetimeWins?: number | null;
+  lifetimeLosses?: number | null;
+  clubPoints?: number | null;
 }
 
 const ROLES = ["PLAYER", "COACH", "ADMIN", "OWNER"];
 
 function MembersInner() {
-  const { activeClubId } = useSession();
+  const { activeClubId, activeMembership, me } = useSession();
   const [rows, setRows] = useState<MemberRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
@@ -31,6 +37,8 @@ function MembersInner() {
   const [addOpen, setAddOpen] = useState(false);
   const [pending, setPending] = useState<MemberRow[]>([]);
   const { toast, node } = useToast();
+
+  const canManage = ["OWNER", "ADMIN"].includes(activeMembership?.role ?? "") || me?.role === "SUPER_ADMIN";
 
   async function load() {
     if (!activeClubId) return;
@@ -83,22 +91,33 @@ function MembersInner() {
     }
   }
 
+  const tableHeaders = canManage
+    ? ["Player", "Role", "Rating", "Club Record", "Lifetime Record", "Attendance", "Balance", "Joined"]
+    : ["Player", "Role", "Rating", "Club Record", "Lifetime Record", "Joined"];
+
   return (
     <div className="space-y-4">
       {node}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold">Members</h1>
-        <Button onClick={() => setAddOpen(true)}>+ Add member</Button>
+        <div>
+          <h1 className="text-2xl font-bold">Members Directory</h1>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Club player roster, skill ratings, and match records.
+          </p>
+        </div>
+        {canManage && <Button onClick={() => setAddOpen(true)}>+ Add member</Button>}
       </div>
 
-      <Tabs
-        tabs={[
-          { key: "active", label: `Active (${rows.length})` },
-          { key: "pending", label: "Requests" }
-        ]}
-        active={tab}
-        onChange={setTab}
-      />
+      {canManage && (
+        <Tabs
+          tabs={[
+            { key: "active", label: `Active (${rows.length})` },
+            { key: "pending", label: "Requests" }
+          ]}
+          active={tab}
+          onChange={setTab}
+        />
+      )}
 
       {tab === "active" && (
         <>
@@ -108,38 +127,79 @@ function MembersInner() {
               <Spinner />
             </div>
           ) : (
-            <Table head={["Player", "Role", "Rating", "Attendance", "Balance", "Joined"]}>
+            <Table head={tableHeaders}>
               {rows.map((r) => (
-                <tr key={r.userId} className="border-b last:border-0">
+                <tr key={r.userId} className="border-b last:border-0 hover:bg-muted/40 transition-colors">
                   <Td>
                     <div className="flex items-center gap-2.5">
                       <Avatar name={r.name} src={r.photoUrl} size={32} />
                       <div>
-                        <p className="font-medium">{r.name}</p>
+                        <p className="font-medium text-sm text-foreground">{r.name}</p>
                         <p className="text-xs text-muted-foreground">{r.email}</p>
                       </div>
                     </div>
                   </Td>
                   <Td>
-                    <Select value={r.role} onChange={(e) => changeRole(r.userId, e.target.value)} className="h-8 w-28 text-xs">
-                      {ROLES.map((role) => (
-                        <option key={role} value={role}>
-                          {role}
-                        </option>
-                      ))}
-                    </Select>
+                    {canManage ? (
+                      <Select value={r.role} onChange={(e) => changeRole(r.userId, e.target.value)} className="h-8 w-28 text-xs">
+                        {ROLES.map((role) => (
+                          <option key={role} value={role}>
+                            {role}
+                          </option>
+                        ))}
+                      </Select>
+                    ) : (
+                      <Badge tone={r.role === "OWNER" || r.role === "ADMIN" ? "primary" : r.role === "COACH" ? "warning" : "muted"}>
+                        {r.role}
+                      </Badge>
+                    )}
                   </Td>
-                  <Td className="tabular-nums">{Math.round(r.rating)}</Td>
-                  <Td>{r.attendanceRate}%</Td>
-                  <Td className={`tabular-nums ${r.balance < 0 ? "text-destructive" : ""}`}>
-                    ₹{(r.balance / 100).toLocaleString("en-IN")}
+                  <Td className="tabular-nums font-semibold">{Math.round(r.rating)}</Td>
+                  <Td>
+                    {r.showStats !== false && r.clubWins !== null && r.clubWins !== undefined ? (
+                      <span className="tabular-nums font-medium text-xs flex items-center gap-1.5">
+                        <span>
+                          <span className="font-bold text-emerald-600 dark:text-emerald-400">{r.clubWins}W</span>
+                          <span className="text-muted-foreground mx-1">-</span>
+                          <span className="text-rose-600 dark:text-rose-400">{r.clubLosses}L</span>
+                        </span>
+                        {r.clubPoints !== null && r.clubPoints !== undefined && (
+                          <Badge tone="primary" className="text-[10px] px-1.5 py-0">
+                            {r.clubPoints >= 0 ? "+" : ""}{r.clubPoints} pts
+                          </Badge>
+                        )}
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center rounded-md bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                        Private
+                      </span>
+                    )}
                   </Td>
+                  <Td>
+                    {r.showStats !== false && r.lifetimeWins !== null && r.lifetimeWins !== undefined ? (
+                      <span className="tabular-nums font-medium text-xs">
+                        <span className="font-bold text-emerald-600 dark:text-emerald-400">{r.lifetimeWins}W</span>
+                        <span className="text-muted-foreground mx-1">-</span>
+                        <span className="text-rose-600 dark:text-rose-400">{r.lifetimeLosses}L</span>
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center rounded-md bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                        Private
+                      </span>
+                    )}
+                  </Td>
+                  {canManage && <Td className="text-xs tabular-nums">{r.attendanceRate}%</Td>}
+                  {canManage && (
+                    <Td className={`tabular-nums font-medium text-xs ${r.balance < 0 ? "text-destructive" : ""}`}>
+                      ₹{(r.balance / 100).toLocaleString("en-IN")}
+                    </Td>
+                  )}
                   <Td className="text-xs text-muted-foreground">{new Date(r.joinedAt).toLocaleDateString()}</Td>
                 </tr>
               ))}
               {rows.length === 0 && (
                 <tr>
-                  <Td colSpan={6} className="py-10 text-center text-muted-foreground">
+                  <Td colSpan={tableHeaders.length} className="py-10 text-center text-muted-foreground">
                     No members found.
                   </Td>
                 </tr>

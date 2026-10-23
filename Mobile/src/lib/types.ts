@@ -13,6 +13,7 @@ export interface SessionUser {
   playingStyle?: string | null;
   dominantHand?: string | null;
   preferredTime?: string | null;
+  showMatchStats?: boolean;
 }
 
 export interface AuthSession {
@@ -436,6 +437,12 @@ export interface MemberItem {
   balance: number;
   attendanceRate: number;
   joinedAt: string;
+  showStats?: boolean;
+  clubWins?: number | null;
+  clubLosses?: number | null;
+  lifetimeWins?: number | null;
+  lifetimeLosses?: number | null;
+  clubPoints?: number | null;
 }
 
 // ----------------- Penalty Types -----------------
@@ -462,6 +469,13 @@ export interface PenaltyRule {
 
 // ----------------- Club Settings Types -----------------
 
+export interface ClubPointsConfig {
+  winPoints: number;
+  lossPoints: number;
+  attendancePoints: number;
+  absencePoints: number;
+}
+
 export interface ClubSettings {
   sport?: string;
   attendance: {
@@ -476,6 +490,7 @@ export interface ClubSettings {
   booking: { cancellationWindowMinutes: number };
   membership: { monthlyFee: number; autoApprove: boolean };
   matchmaking?: { allowAbsent: boolean };
+  pointsConfig?: ClubPointsConfig;
 }
 
 // ----------------- Coaching & Coach Types -----------------

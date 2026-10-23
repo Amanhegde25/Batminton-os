@@ -99,7 +99,7 @@ const NAV_SECTIONS: NavSection[] = [
   {
     title: "Finance & Roster",
     items: [
-      { href: "/app/members", label: "Members", icon: Users, staff: true },
+      { href: "/app/members", label: "Members", icon: Users },
       { href: "/app/wallet", label: "Wallet", icon: Wallet },
       { href: "/app/penalties", label: "Penalties", icon: Scale }
     ]

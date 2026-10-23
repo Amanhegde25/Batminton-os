@@ -7,7 +7,8 @@ import {
   TouchableOpacity,
   TextInput,
   ActivityIndicator,
-  Alert
+  Alert,
+  Switch
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -44,6 +45,7 @@ export default function SettingsScreen() {
   const [hand, setHand] = useState(user?.dominantHand || "RIGHT");
   const [style, setStyle] = useState(user?.playingStyle || "ALL_ROUND");
   const [time, setTime] = useState(user?.preferredTime || "EVENING");
+  const [showMatchStats, setShowMatchStats] = useState(user?.showMatchStats !== false);
 
   useEffect(() => {
     if (user) {
@@ -54,6 +56,7 @@ export default function SettingsScreen() {
       setHand(user.dominantHand || "RIGHT");
       setStyle(user.playingStyle || "ALL_ROUND");
       setTime(user.preferredTime || "EVENING");
+      setShowMatchStats(user.showMatchStats !== false);
     }
   }, [user]);
 
@@ -78,7 +81,8 @@ export default function SettingsScreen() {
         aadhar: cleanAadhar ? cleanAadhar : null,
         dominantHand: hand,
         playingStyle: style,
-        preferredTime: time
+        preferredTime: time,
+        showMatchStats
       });
     },
     onSuccess: async (updatedUser) => {
@@ -242,6 +246,22 @@ export default function SettingsScreen() {
                 </TouchableOpacity>
               ))}
             </View>
+          </View>
+
+          {/* Privacy & Match Stats Toggle */}
+          <View style={styles.privacySection}>
+            <View style={{ flex: 1, paddingRight: 12 }}>
+              <Text style={styles.label}>Show Match Stats in Directory</Text>
+              <Text style={styles.privacySubtext}>
+                Display your club and lifetime wins & losses to fellow members. Turn off to keep your record private.
+              </Text>
+            </View>
+            <Switch
+              value={showMatchStats}
+              onValueChange={setShowMatchStats}
+              trackColor={{ false: colors.cardBorder, true: colors.primary }}
+              thumbColor={showMatchStats ? colors.primaryForeground : colors.textMuted}
+            />
           </View>
 
           <TouchableOpacity
@@ -454,5 +474,20 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "700",
     color: colors.danger
+  },
+  privacySection: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: colors.cardBorder,
+    marginBottom: 4
+  },
+  privacySubtext: {
+    fontSize: 11,
+    color: colors.textMuted,
+    marginTop: 2,
+    lineHeight: 15
   }
 });

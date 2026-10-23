@@ -19,6 +19,7 @@ import { Card } from "../../src/components/Card";
 import type { LeaderboardEntry } from "../../src/lib/types";
 
 const CATEGORIES = [
+  { key: "CLUB_POINTS", label: "Club Points", icon: Trophy },
   { key: "HIGHEST_RATING", label: "Rating", icon: Crown },
   { key: "HIGHEST_WIN_RATE", label: "Win Rate %", icon: Target },
   { key: "LONGEST_WINNING_STREAK", label: "Win Streak", icon: Flame },
@@ -35,7 +36,7 @@ const PERIODS = [
 
 export default function LeaderboardsScreen() {
   const { activeClubId } = useClub();
-  const [selectedCategory, setSelectedCategory] = useState("HIGHEST_RATING");
+  const [selectedCategory, setSelectedCategory] = useState("CLUB_POINTS");
   const [selectedPeriod, setSelectedPeriod] = useState("ALL_TIME");
 
   const { data, isLoading, isRefetching, refetch } = useQuery({

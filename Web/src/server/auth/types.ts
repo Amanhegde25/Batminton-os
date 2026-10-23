@@ -8,6 +8,7 @@ export interface SessionUser {
   photoUrl: string | null;
   role: string;
   tokenVersion: number;
+  showMatchStats?: boolean;
 }
 
 export interface User {
@@ -26,6 +27,7 @@ export interface User {
   playingStyle: string | null;
   dominantHand: string | null;
   preferredTime: string | null;
+  showMatchStats?: boolean | null;
   googleId: string | null;
   tokenVersion: number;
   createdAt: Date;

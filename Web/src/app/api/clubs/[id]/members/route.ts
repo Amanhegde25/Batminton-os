@@ -8,11 +8,35 @@ import { clubMembers } from "@/server/db";
 export const GET = handler(async (req, { params }) => {
   const user = await requireUser(await currentUser());
   const { id } = await params;
-  await requireManagerOrCoach(id, user);
+
+  let requesterMembership = null;
+  if (user.role !== "SUPER_ADMIN") {
+    requesterMembership = await clubMembers().findOne({ clubId: id, userId: user.id });
+    if (!requesterMembership || (requesterMembership.status !== "ACTIVE" && !["OWNER", "ADMIN"].includes(requesterMembership.role))) {
+      throw ApiError.forbidden("You must be an active member of this club to view members");
+    }
+  } else {
+    requesterMembership = await clubMembers().findOne({ clubId: id, userId: user.id });
+  }
+
   const url = new URL(req.url);
   const q = url.searchParams.get("q") ?? undefined;
   const status = url.searchParams.get("status") ?? undefined;
-  return ok(await listMembers(id, q || undefined, status || undefined));
+  const items = await listMembers(id, q || undefined, status || undefined);
+
+  // Sanitize private wallet balances for non-staff members
+  const isStaff = user.role === "SUPER_ADMIN" || ["OWNER", "ADMIN", "COACH"].includes(requesterMembership?.role ?? "");
+  if (!isStaff) {
+    return ok(
+      items.map((m) => ({
+        ...m,
+        balance: 0,
+        walletBalance: 0
+      }))
+    );
+  }
+
+  return ok(items);
 });
 
 const addSchema = z.object({

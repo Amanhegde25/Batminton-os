@@ -14,7 +14,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Users, Search, Plus, Mail } from "lucide-react-native";
+import { ArrowLeft, Users, Search, Plus, Mail, EyeOff, Trophy } from "lucide-react-native";
 import { useClub } from "../src/context/club";
 import { api } from "../src/lib/api";
 import { colors } from "../src/theme/colors";
@@ -121,30 +121,71 @@ export default function MembersScreen() {
             tintColor={colors.primary}
           />
         }
-        renderItem={({ item }) => (
-          <Card style={styles.memberCard}>
-            <View style={styles.avatarCircle}>
-              <Text style={styles.avatarChar}>
-                {item.name ? item.name[0].toUpperCase() : "U"}
-              </Text>
-            </View>
+        renderItem={({ item }) => {
+          const hasStats = item.showStats !== false && item.clubWins !== null && item.clubWins !== undefined;
 
-            <View style={styles.infoCol}>
-              <Text style={styles.nameText}>{item.name}</Text>
-              <View style={styles.emailRow}>
-                <Mail size={12} color={colors.textMuted} />
-                <Text style={styles.emailText} numberOfLines={1}>
-                  {item.email}
+          return (
+            <Card style={styles.memberCard}>
+              <View style={styles.avatarCircle}>
+                <Text style={styles.avatarChar}>
+                  {item.name ? item.name[0].toUpperCase() : "U"}
                 </Text>
               </View>
-            </View>
 
-            <Badge
-              label={item.role}
-              tone={ROLE_TONE[item.role] ?? "muted"}
-            />
-          </Card>
-        )}
+              <View style={styles.infoCol}>
+                <View style={styles.nameHeader}>
+                  <Text style={styles.nameText} numberOfLines={1}>
+                    {item.name}
+                  </Text>
+                  <Badge
+                    label={item.role}
+                    tone={ROLE_TONE[item.role] ?? "muted"}
+                  />
+                </View>
+
+                <View style={styles.emailRow}>
+                  <Mail size={12} color={colors.textMuted} />
+                  <Text style={styles.emailText} numberOfLines={1}>
+                    {item.email}
+                  </Text>
+                </View>
+
+                {/* Match Statistics */}
+                {hasStats ? (
+                  <View style={styles.statsPillRow}>
+                    <View style={styles.clubStatPill}>
+                      <Text style={styles.statPillLabel}>Club:</Text>
+                      <Text style={styles.statPillWon}>{item.clubWins}W</Text>
+                      <Text style={styles.statPillSlash}>-</Text>
+                      <Text style={styles.statPillLost}>{item.clubLosses}L</Text>
+                    </View>
+
+                    {item.clubPoints !== null && item.clubPoints !== undefined && (
+                      <View style={styles.pointsStatPill}>
+                        <Trophy size={10} color={colors.primary} />
+                        <Text style={styles.pointsStatText}>
+                          {item.clubPoints >= 0 ? "+" : ""}{item.clubPoints} pts
+                        </Text>
+                      </View>
+                    )}
+
+                    <View style={styles.lifetimeStatPill}>
+                      <Text style={styles.statPillLabel}>Lifetime:</Text>
+                      <Text style={styles.statPillWon}>{item.lifetimeWins}W</Text>
+                      <Text style={styles.statPillSlash}>-</Text>
+                      <Text style={styles.statPillLost}>{item.lifetimeLosses}L</Text>
+                    </View>
+                  </View>
+                ) : (
+                  <View style={styles.privateStatBadge}>
+                    <EyeOff size={11} color={colors.textMuted} />
+                    <Text style={styles.privateStatText}>Stats Private</Text>
+                  </View>
+                )}
+              </View>
+            </Card>
+          );
+        }}
         ListEmptyComponent={
           isLoading ? (
             <View style={styles.center}>
@@ -318,12 +359,19 @@ const styles = StyleSheet.create({
   },
   infoCol: {
     flex: 1,
-    gap: 2
+    gap: 3
+  },
+  nameHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 8
   },
   nameText: {
     fontSize: 14,
     fontWeight: "700",
-    color: colors.text
+    color: colors.text,
+    flex: 1
   },
   emailRow: {
     flexDirection: "row",
@@ -332,6 +380,87 @@ const styles = StyleSheet.create({
   },
   emailText: {
     fontSize: 12,
+    color: colors.textMuted
+  },
+  statsPillRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+    marginTop: 4
+  },
+  clubStatPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(22, 163, 74, 0.08)",
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 5,
+    borderWidth: 1,
+    borderColor: "rgba(22, 163, 74, 0.25)",
+    gap: 3
+  },
+  pointsStatPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.primaryLight,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 5,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    gap: 3
+  },
+  pointsStatText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: colors.primary
+  },
+  lifetimeStatPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.cardElevated,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 5,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    gap: 3
+  },
+  statPillLabel: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: colors.textMuted
+  },
+  statPillWon: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#16a34a"
+  },
+  statPillSlash: {
+    fontSize: 10,
+    color: colors.textMuted
+  },
+  statPillLost: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#dc2626"
+  },
+  privateStatBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginTop: 4,
+    alignSelf: "flex-start",
+    backgroundColor: colors.cardElevated,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: colors.cardBorder
+  },
+  privateStatText: {
+    fontSize: 10,
+    fontWeight: "600",
     color: colors.textMuted
   },
   center: {

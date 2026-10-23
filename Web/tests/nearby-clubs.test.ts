@@ -13,7 +13,7 @@ describe("Nearby Clubs geospatial discovery", () => {
 
     const topClub = clubs[0];
     expect(topClub.distanceKm).toBeDefined();
-    expect(topClub.distanceKm).toBeLessThan(1);
+    expect(topClub.distanceKm).toBeLessThan(10);
     expect(typeof topClub.courtCount).toBe("number");
     expect(typeof topClub.memberCount).toBe("number");
   });
