@@ -28,7 +28,7 @@ import {
   X,
   Users
 } from "@/components/icons";
-import { DAYS_OF_WEEK, DEFAULT_COACHING_SLOTS, type DayOfWeek } from "@/lib/constants";
+import { DAYS_OF_WEEK, DEFAULT_COACHING_SLOTS, COACHING_LEVELS, COACHING_LEVEL_LABELS, type DayOfWeek, type CoachingLevel } from "@/lib/constants";
 
 interface CoachItem {
   id: string;
@@ -39,6 +39,12 @@ interface CoachItem {
   email: string | null;
   photoUrl: string | null;
   hourlyFee: number;
+  pricing: {
+    BEGINNER: number;
+    INTERMEDIATE: number;
+    ADVANCED: number;
+  };
+  levels: CoachingLevel[];
   availableDays: string[];
   availableTimeSlots: string[];
   active: boolean;
@@ -55,6 +61,7 @@ interface CoachingBookingItem {
   sessionDate: string;
   dayOfWeek: string;
   timeSlot: string;
+  level: CoachingLevel;
   notes: string | null;
   fee: number;
   status: "CONFIRMED" | "COMPLETED" | "CANCELLED";
@@ -81,7 +88,10 @@ export default function ClubAdminCoachingPage() {
   const [formBio, setFormBio] = useState("");
   const [formPhone, setFormPhone] = useState("");
   const [formEmail, setFormEmail] = useState("");
-  const [formFee, setFormFee] = useState("500");
+  const [formFeeBeginner, setFormFeeBeginner] = useState("400");
+  const [formFeeIntermediate, setFormFeeIntermediate] = useState("600");
+  const [formFeeAdvanced, setFormFeeAdvanced] = useState("850");
+  const [formLevels, setFormLevels] = useState<CoachingLevel[]>([...COACHING_LEVELS]);
   const [formDays, setFormDays] = useState<string[]>([...DAYS_OF_WEEK]);
   const [formSlots, setFormSlots] = useState<string[]>([
     "06:00 - 07:00",
@@ -121,7 +131,10 @@ export default function ClubAdminCoachingPage() {
     setFormBio("");
     setFormPhone("");
     setFormEmail("");
-    setFormFee("500");
+    setFormFeeBeginner("400");
+    setFormFeeIntermediate("600");
+    setFormFeeAdvanced("850");
+    setFormLevels([...COACHING_LEVELS]);
     setFormDays([...DAYS_OF_WEEK]);
     setFormSlots([
       "06:00 - 07:00",
@@ -141,11 +154,28 @@ export default function ClubAdminCoachingPage() {
     setFormBio(c.bio || "");
     setFormPhone(c.phone || "");
     setFormEmail(c.email || "");
-    setFormFee(String(Math.round(c.hourlyFee / 100)));
+    const bFee = c.pricing?.BEGINNER ? Math.round(c.pricing.BEGINNER / 100) : Math.round(c.hourlyFee / 100);
+    const iFee = c.pricing?.INTERMEDIATE ? Math.round(c.pricing.INTERMEDIATE / 100) : Math.round((c.hourlyFee * 1.25) / 100);
+    const aFee = c.pricing?.ADVANCED ? Math.round(c.pricing.ADVANCED / 100) : Math.round((c.hourlyFee * 1.6) / 100);
+    setFormFeeBeginner(String(bFee || 400));
+    setFormFeeIntermediate(String(iFee || 600));
+    setFormFeeAdvanced(String(aFee || 850));
+    setFormLevels(Array.isArray(c.levels) && c.levels.length > 0 ? c.levels : [...COACHING_LEVELS]);
     setFormDays(c.availableDays || [...DAYS_OF_WEEK]);
     setFormSlots(c.availableTimeSlots || [...DEFAULT_COACHING_SLOTS]);
     setFormActive(c.active);
     setModalOpen(true);
+  }
+
+  function toggleLevel(level: CoachingLevel) {
+    if (formLevels.includes(level)) {
+      if (formLevels.length === 1) {
+        return toast("Coach must offer at least one coaching level", "error");
+      }
+      setFormLevels(formLevels.filter((lvl) => lvl !== level));
+    } else {
+      setFormLevels([...formLevels, level]);
+    }
   }
 
   function toggleDay(day: string) {
@@ -183,43 +213,46 @@ export default function ClubAdminCoachingPage() {
   async function handleSaveCoach(e: React.FormEvent) {
     e.preventDefault();
     if (!formName.trim()) return toast("Coach name is required", "error");
+    if (formLevels.length === 0) return toast("Select at least one coaching level", "error");
     if (formDays.length === 0) return toast("Select at least one day", "error");
     if (formSlots.length === 0) return toast("Select at least one time slot", "error");
 
     setSavingCoach(true);
     try {
-      const feeInPaise = (Number(formFee) || 0) * 100;
+      const bFeePaise = (Math.max(0, Number(formFeeBeginner)) || 0) * 100;
+      const iFeePaise = (Math.max(0, Number(formFeeIntermediate)) || 0) * 100;
+      const aFeePaise = (Math.max(0, Number(formFeeAdvanced)) || 0) * 100;
+
+      const payload = {
+        name: formName.trim(),
+        title: formTitle.trim() || undefined,
+        bio: formBio.trim() || undefined,
+        phone: formPhone.trim() || undefined,
+        email: formEmail.trim() || undefined,
+        hourlyFee: bFeePaise,
+        pricing: {
+          BEGINNER: bFeePaise,
+          INTERMEDIATE: iFeePaise,
+          ADVANCED: aFeePaise
+        },
+        levels: formLevels,
+        availableDays: formDays,
+        availableTimeSlots: formSlots,
+        ...(editingCoach ? { active: formActive } : {})
+      };
+
       if (editingCoach) {
         await api(`/clubs/${activeClubId}/coaches/${editingCoach.id}`, {
           method: "PATCH",
-          json: {
-            name: formName.trim(),
-            title: formTitle.trim() || undefined,
-            bio: formBio.trim() || undefined,
-            phone: formPhone.trim() || undefined,
-            email: formEmail.trim() || undefined,
-            hourlyFee: feeInPaise,
-            availableDays: formDays,
-            availableTimeSlots: formSlots,
-            active: formActive
-          }
+          json: payload
         });
-        toast("Coach profile updated");
+        toast("Coach profile and level rates updated");
       } else {
         await api(`/clubs/${activeClubId}/coaches`, {
           method: "POST",
-          json: {
-            name: formName.trim(),
-            title: formTitle.trim() || undefined,
-            bio: formBio.trim() || undefined,
-            phone: formPhone.trim() || undefined,
-            email: formEmail.trim() || undefined,
-            hourlyFee: feeInPaise,
-            availableDays: formDays,
-            availableTimeSlots: formSlots
-          }
+          json: payload
         });
-        toast("New coach added to club roster");
+        toast("New coach added to club roster with custom level pricing");
       }
       setModalOpen(false);
       void loadData();
@@ -334,10 +367,31 @@ export default function ClubAdminCoachingPage() {
                       <p className="text-xs text-muted-foreground line-clamp-2">{coach.bio}</p>
                     )}
 
-                    <div className="rounded-xl bg-muted/40 p-3 space-y-2 border border-border/50 text-xs">
-                      <div className="flex items-center justify-between">
-                        <span className="text-muted-foreground">Session Fee:</span>
-                        <span className="font-bold text-foreground">₹{Math.round(coach.hourlyFee / 100)} / hr</span>
+                    <div className="rounded-xl bg-muted/40 p-3 space-y-2.5 border border-border/50 text-xs">
+                      <div>
+                        <span className="text-[11px] text-muted-foreground font-semibold flex items-center justify-between mb-1.5">
+                          <span>Level Pricing (Admin Configured):</span>
+                        </span>
+                        <div className="grid grid-cols-3 gap-1.5 text-center">
+                          <div className={`p-1.5 rounded-lg border ${coach.levels?.includes("BEGINNER") ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-300" : "opacity-40 bg-muted/30 border-dashed"}`}>
+                            <div className="text-[10px] font-bold">Beginner</div>
+                            <div className="font-mono text-xs font-bold mt-0.5">
+                              ₹{Math.round((coach.pricing?.BEGINNER ?? coach.hourlyFee) / 100)}
+                            </div>
+                          </div>
+                          <div className={`p-1.5 rounded-lg border ${coach.levels?.includes("INTERMEDIATE") ? "bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-300" : "opacity-40 bg-muted/30 border-dashed"}`}>
+                            <div className="text-[10px] font-bold">Intermediate</div>
+                            <div className="font-mono text-xs font-bold mt-0.5">
+                              ₹{Math.round((coach.pricing?.INTERMEDIATE ?? coach.hourlyFee * 1.25) / 100)}
+                            </div>
+                          </div>
+                          <div className={`p-1.5 rounded-lg border ${coach.levels?.includes("ADVANCED") ? "bg-purple-500/10 border-purple-500/30 text-purple-700 dark:text-purple-300" : "opacity-40 bg-muted/30 border-dashed"}`}>
+                            <div className="text-[10px] font-bold">Advanced</div>
+                            <div className="font-mono text-xs font-bold mt-0.5">
+                              ₹{Math.round((coach.pricing?.ADVANCED ?? coach.hourlyFee * 1.6) / 100)}
+                            </div>
+                          </div>
+                        </div>
                       </div>
 
                       <div className="space-y-1">
@@ -411,7 +465,7 @@ export default function ClubAdminCoachingPage() {
           </div>
 
           <Card className="p-0 overflow-hidden">
-            <Table head={["Member", "Coach", "Date & Day", "Time Slot", "Fee", "Status", "Actions"]}>
+            <Table head={["Member", "Coach & Level", "Date & Day", "Time Slot", "Fee", "Status", "Actions"]}>
               {filteredBookings.map((b) => (
                 <tr key={b.id} className="border-b last:border-0 hover:bg-muted/20 transition-colors">
                   <Td>
@@ -426,9 +480,23 @@ export default function ClubAdminCoachingPage() {
                     </div>
                   </Td>
                   <Td>
-                    <span className="font-medium text-xs text-foreground flex items-center gap-1">
-                      <Award className="h-3.5 w-3.5 text-primary" /> {b.coachName}
-                    </span>
+                    <div className="space-y-1">
+                      <span className="font-semibold text-xs text-foreground flex items-center gap-1">
+                        <Award className="h-3.5 w-3.5 text-primary" /> {b.coachName}
+                      </span>
+                      <Badge
+                        tone={
+                          b.level === "BEGINNER"
+                            ? "primary"
+                            : b.level === "INTERMEDIATE"
+                            ? "warning"
+                            : "accent"
+                        }
+                        className="text-[9px]"
+                      >
+                        {COACHING_LEVEL_LABELS[b.level] || b.level} Level
+                      </Badge>
+                    </div>
                   </Td>
                   <Td className="text-xs">
                     <div className="font-medium">{b.sessionDate}</div>
@@ -507,25 +575,129 @@ export default function ClubAdminCoachingPage() {
             />
           </Field>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Designation / Title" hint="e.g. Senior Badminton Coach">
-              <Input
-                value={formTitle}
-                onChange={(e) => setFormTitle(e.target.value)}
-                placeholder="e.g. Head Coach • BWF Certified"
-              />
-            </Field>
+          <Field label="Designation / Title" hint="e.g. Senior Badminton Coach • BWF Level 2">
+            <Input
+              value={formTitle}
+              onChange={(e) => setFormTitle(e.target.value)}
+              placeholder="e.g. Head Coach • BWF Certified"
+            />
+          </Field>
 
-            <Field label="Session Fee (₹/hr)" hint="Standard hourly coaching fee">
-              <Input
-                type="number"
-                min={0}
-                value={formFee}
-                onChange={(e) => setFormFee(e.target.value)}
-                placeholder="500"
-                required
-              />
-            </Field>
+          {/* Coaching Levels & Custom Cost Configuration */}
+          <div className="space-y-2.5 pt-1 border-t border-border/50">
+            <div>
+              <label className="text-xs font-semibold text-foreground">Coaching Levels & Rates (₹/hr)</label>
+              <p className="text-[11px] text-muted-foreground">
+                Set individual pricing for each skill level and choose which levels this coach is available to teach:
+              </p>
+            </div>
+
+            <div className="grid gap-2.5 sm:grid-cols-3">
+              {/* Beginner */}
+              <div
+                className={`rounded-xl border p-3 transition-all ${
+                  formLevels.includes("BEGINNER")
+                    ? "border-emerald-500/40 bg-emerald-500/5 shadow-xs"
+                    : "border-border/60 bg-muted/20 opacity-60"
+                }`}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">Beginner</span>
+                  <input
+                    type="checkbox"
+                    checked={formLevels.includes("BEGINNER")}
+                    onChange={() => toggleLevel("BEGINNER")}
+                    className="h-4 w-4 rounded text-primary border-border focus:ring-primary cursor-pointer"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] text-muted-foreground font-medium">Session Fee (₹/hr)</label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={formFeeBeginner}
+                    disabled={!formLevels.includes("BEGINNER")}
+                    onChange={(e) => setFormFeeBeginner(e.target.value)}
+                    placeholder="400"
+                    className="h-8 text-xs font-mono"
+                    required={formLevels.includes("BEGINNER")}
+                  />
+                </div>
+                <p className="text-[10px] text-muted-foreground mt-1.5 leading-tight">
+                  Grip fundamentals, footwork basics & initial drills
+                </p>
+              </div>
+
+              {/* Intermediate */}
+              <div
+                className={`rounded-xl border p-3 transition-all ${
+                  formLevels.includes("INTERMEDIATE")
+                    ? "border-amber-500/40 bg-amber-500/5 shadow-xs"
+                    : "border-border/60 bg-muted/20 opacity-60"
+                }`}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-bold text-amber-600 dark:text-amber-400">Intermediate</span>
+                  <input
+                    type="checkbox"
+                    checked={formLevels.includes("INTERMEDIATE")}
+                    onChange={() => toggleLevel("INTERMEDIATE")}
+                    className="h-4 w-4 rounded text-primary border-border focus:ring-primary cursor-pointer"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] text-muted-foreground font-medium">Session Fee (₹/hr)</label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={formFeeIntermediate}
+                    disabled={!formLevels.includes("INTERMEDIATE")}
+                    onChange={(e) => setFormFeeIntermediate(e.target.value)}
+                    placeholder="600"
+                    className="h-8 text-xs font-mono"
+                    required={formLevels.includes("INTERMEDIATE")}
+                  />
+                </div>
+                <p className="text-[10px] text-muted-foreground mt-1.5 leading-tight">
+                  Rallies, drop shots, smashes & consistency
+                </p>
+              </div>
+
+              {/* Advanced */}
+              <div
+                className={`rounded-xl border p-3 transition-all ${
+                  formLevels.includes("ADVANCED")
+                    ? "border-purple-500/40 bg-purple-500/5 shadow-xs"
+                    : "border-border/60 bg-muted/20 opacity-60"
+                }`}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-bold text-purple-600 dark:text-purple-400">Advanced</span>
+                  <input
+                    type="checkbox"
+                    checked={formLevels.includes("ADVANCED")}
+                    onChange={() => toggleLevel("ADVANCED")}
+                    className="h-4 w-4 rounded text-primary border-border focus:ring-primary cursor-pointer"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] text-muted-foreground font-medium">Session Fee (₹/hr)</label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={formFeeAdvanced}
+                    disabled={!formLevels.includes("ADVANCED")}
+                    onChange={(e) => setFormFeeAdvanced(e.target.value)}
+                    placeholder="850"
+                    className="h-8 text-xs font-mono"
+                    required={formLevels.includes("ADVANCED")}
+                  />
+                </div>
+                <p className="text-[10px] text-muted-foreground mt-1.5 leading-tight">
+                  Match strategy, deceptive play, speed & power
+                </p>
+              </div>
+            </div>
           </div>
 
           <Field label="Bio / Specialization" hint="Brief summary of strengths and coaching style">

@@ -35,10 +35,37 @@ const TAB_STATUS: Record<string, string[] | undefined> = {
   all: undefined
 };
 
+interface HistoryRow {
+  id: string;
+  clubId: string;
+  club: { id: string; name: string; slug?: string; logoUrl?: string | null };
+  type: string;
+  status: string;
+  scheduledAt: string | null;
+  startedAt: string | null;
+  endedAt: string | null;
+  winnerTeamIndex: number | null;
+  isWalkover: boolean;
+  notes: string | null;
+  court: { id: string; name: string; number: number } | null;
+  teams: { teamIndex: number; players: { id: string; name: string; photoUrl: string | null }[] }[];
+  scores: { setNumber: number; a: number; b: number }[];
+  playerTeamIndex: number;
+  won: boolean | null;
+  opponents: { id: string; name: string; photoUrl: string | null }[];
+  partners: { id: string; name: string; photoUrl: string | null }[];
+  ratingChange: number | null;
+}
+
 function MatchesInner() {
   const { activeClubId, activeMembership } = useSession();
-  const [tab, setTab] = useState<"live" | "upcoming" | "done" | "all">("upcoming");
+  const [tab, setTab] = useState<"live" | "upcoming" | "done" | "all" | "history">("upcoming");
   const [rows, setRows] = useState<MatchRow[]>([]);
+  const [historyRows, setHistoryRows] = useState<HistoryRow[]>([]);
+  const [historyClubs, setHistoryClubs] = useState<{ id: string; name: string }[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [clubFilter, setClubFilter] = useState("ALL");
+  const [outcomeFilter, setOutcomeFilter] = useState<"ALL" | "WON" | "LOST">("ALL");
   const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
   const [page, setPage] = useState(1);
@@ -67,10 +94,38 @@ function MatchesInner() {
     }
   }
 
+  async function loadHistory(p = 1) {
+    setLoading(true);
+    try {
+      const qs = new URLSearchParams({ page: String(p), pageSize: "20" });
+      if (searchQuery.trim()) qs.set("q", searchQuery.trim());
+      if (clubFilter !== "ALL") qs.set("clubId", clubFilter);
+      if (outcomeFilter !== "ALL") qs.set("outcome", outcomeFilter);
+      const data = await api<{
+        items: HistoryRow[];
+        total: number;
+        pageSize: number;
+        clubs: { id: string; name: string }[];
+      }>(`/matches/history?${qs.toString()}`);
+      setHistoryRows(data.items);
+      setHistoryClubs(data.clubs ?? []);
+      setTotalPages(Math.max(1, Math.ceil(data.total / data.pageSize)));
+      setPage(p);
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Failed to load match history", "error");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   useEffect(() => {
-    void load(1);
+    if (tab === "history") {
+      void loadHistory(1);
+    } else {
+      void load(1);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeClubId, tab]);
+  }, [activeClubId, tab, clubFilter, outcomeFilter]);
 
   function tone(status: string): "danger" | "success" | "muted" | "warning" {
     return status === "LIVE" || status === "IN_PROGRESS"
@@ -93,19 +148,177 @@ function MatchesInner() {
               { key: "live", label: "Live" },
               { key: "upcoming", label: "Upcoming" },
               { key: "done", label: "Results" },
-              { key: "all", label: "All" }
+              { key: "all", label: "All" },
+              { key: "history", label: "My History" }
             ]}
             active={tab}
             onChange={(k) => setTab(k as typeof tab)}
           />
-          {canCreate && <Button onClick={() => setCreateOpen(true)}>+ New match</Button>}
+          {canCreate && tab !== "history" && (
+            <Button onClick={() => setCreateOpen(true)}>+ New match</Button>
+          )}
         </div>
       </div>
+
+      {tab === "history" && (
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card p-3 shadow-sm">
+          <div className="min-w-[200px] flex-1">
+            <Input
+              placeholder="Search opponents or clubs..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void loadHistory(1);
+              }}
+            />
+          </div>
+          <div className="w-36">
+            <Select
+              value={outcomeFilter}
+              onChange={(e) => setOutcomeFilter(e.target.value as "ALL" | "WON" | "LOST")}
+            >
+              <option value="ALL">All Outcomes</option>
+              <option value="WON">Wins Only</option>
+              <option value="LOST">Losses Only</option>
+            </Select>
+          </div>
+          {historyClubs.length > 0 && (
+            <div className="w-44">
+              <Select
+                value={clubFilter}
+                onChange={(e) => setClubFilter(e.target.value)}
+              >
+                <option value="ALL">All Clubs</option>
+                {historyClubs.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          )}
+          <Button variant="secondary" onClick={() => void loadHistory(1)}>
+            Search
+          </Button>
+          {(searchQuery || clubFilter !== "ALL" || outcomeFilter !== "ALL") && (
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setSearchQuery("");
+                setClubFilter("ALL");
+                setOutcomeFilter("ALL");
+              }}
+            >
+              Reset
+            </Button>
+          )}
+        </div>
+      )}
 
       {loading ? (
         <div className="flex justify-center py-16">
           <Spinner />
         </div>
+      ) : tab === "history" ? (
+        <Card className="divide-y">
+          {historyRows.map((m) => {
+            const oppNames = m.opponents.map((o) => o.name).join(" & ") || "Opponent";
+            const partnerNames = m.partners.map((p) => p.name).join(" & ");
+            const myTeam = partnerNames ? `You & ${partnerNames}` : "You";
+            const isWin = m.won === true;
+            const isLoss = m.won === false;
+
+            return (
+              <div key={m.id} className="flex flex-wrap items-center justify-between gap-4 p-4 hover:bg-muted/50 transition-colors">
+                <div className="min-w-0 space-y-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="inline-flex items-center rounded-md bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
+                      {m.club.name}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      {m.type === "DOUBLES" ? "Doubles" : "Singles"}
+                    </span>
+                    {m.isWalkover && (
+                      <Badge tone="warning">WALKOVER</Badge>
+                    )}
+                  </div>
+
+                  <div className="text-sm">
+                    <span className={isWin ? "font-bold text-foreground" : "text-muted-foreground"}>
+                      {myTeam}
+                    </span>
+                    <span className="mx-2 text-xs text-muted-foreground">vs</span>
+                    <span className={isLoss ? "font-bold text-foreground" : "text-muted-foreground"}>
+                      {oppNames}
+                    </span>
+                  </div>
+
+                  <p className="text-xs text-muted-foreground">
+                    {m.endedAt || m.scheduledAt
+                      ? new Date(m.endedAt || m.scheduledAt!).toLocaleString([], {
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit"
+                        })
+                      : "Finished"}
+                    {m.court ? ` · #${m.court.number} ${m.court.name}` : ""}
+                  </p>
+                </div>
+
+                <div className="flex shrink-0 items-center gap-3">
+                  {m.scores.length > 0 && (
+                    <div className="flex items-center gap-1.5 font-mono text-sm tabular-nums">
+                      {m.scores.map((s, idx) => {
+                        const myScore = m.playerTeamIndex === 0 ? s.a : s.b;
+                        const oppScore = m.playerTeamIndex === 0 ? s.b : s.a;
+                        const setWon = myScore > oppScore;
+                        return (
+                          <span
+                            key={idx}
+                            className={`rounded px-1.5 py-0.5 text-xs font-semibold ${
+                              setWon
+                                ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
+                                : "bg-muted text-muted-foreground"
+                            }`}
+                          >
+                            {myScore}-{oppScore}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {isWin && <Badge tone="success">WON</Badge>}
+                  {isLoss && <Badge tone="danger">LOST</Badge>}
+
+                  {m.ratingChange !== null && (
+                    <span
+                      className={`text-xs font-bold tabular-nums ${
+                        m.ratingChange >= 0
+                          ? "text-emerald-600 dark:text-emerald-400"
+                          : "text-rose-600 dark:text-rose-400"
+                      }`}
+                    >
+                      {m.ratingChange >= 0 ? `+${m.ratingChange}` : m.ratingChange} pts
+                    </span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+          {historyRows.length === 0 && (
+            <div className="p-12 text-center text-sm text-muted-foreground">
+              <p className="font-semibold text-foreground">No matches found in your history</p>
+              <p className="mt-1">
+                {searchQuery || clubFilter !== "ALL" || outcomeFilter !== "ALL"
+                  ? "Try resetting your search query or filters to see all played matches."
+                  : "Matches you play across all clubs will automatically appear here."}
+              </p>
+            </div>
+          )}
+        </Card>
       ) : (
         <Card className="divide-y">
           {rows.map((m) => (
@@ -132,11 +345,21 @@ function MatchesInner() {
 
       {totalPages > 1 && (
         <div className="flex items-center justify-between text-sm">
-          <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => void load(page - 1)}>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={page <= 1}
+            onClick={() => void (tab === "history" ? loadHistory(page - 1) : load(page - 1))}
+          >
             ← Prev
           </Button>
           <span className="text-muted-foreground">Page {page} of {totalPages}</span>
-          <Button size="sm" variant="outline" disabled={page >= totalPages} onClick={() => void load(page + 1)}>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={page >= totalPages}
+            onClick={() => void (tab === "history" ? loadHistory(page + 1) : load(page + 1))}
+          >
             Next →
           </Button>
         </div>

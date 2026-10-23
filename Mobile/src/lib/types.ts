@@ -248,6 +248,45 @@ export interface MatchRow {
   scores: { setNumber: number; a: number; b: number }[];
 }
 
+export interface PlayerMatchHistoryItem {
+  id: string;
+  clubId: string;
+  club: {
+    id: string;
+    name: string;
+    slug?: string;
+    logoUrl?: string | null;
+  };
+  type: string;
+  status: string;
+  scheduledAt: string | null;
+  startedAt: string | null;
+  endedAt: string | null;
+  winnerTeamIndex: number | null;
+  isWalkover: boolean;
+  notes: string | null;
+  court: { id: string; name: string; number: number } | null;
+  teams: {
+    teamIndex: number;
+    players: { id: string; name: string; photoUrl: string | null }[];
+  }[];
+  scores: { setNumber: number; a: number; b: number }[];
+  playerTeamIndex: number;
+  won: boolean | null;
+  opponents: { id: string; name: string; photoUrl: string | null }[];
+  partners: { id: string; name: string; photoUrl: string | null }[];
+  ratingChange: number | null;
+}
+
+export interface MatchHistoryResponse {
+  items: PlayerMatchHistoryItem[];
+  total: number;
+  page: number;
+  pageSize: number;
+  clubs: { id: string; name: string }[];
+}
+
+
 // ----------------- Court & Booking Types -----------------
 
 export interface CourtItem {
@@ -437,4 +476,48 @@ export interface ClubSettings {
   booking: { cancellationWindowMinutes: number };
   membership: { monthlyFee: number; autoApprove: boolean };
   matchmaking?: { allowAbsent: boolean };
+}
+
+// ----------------- Coaching & Coach Types -----------------
+
+export type CoachingLevel = "BEGINNER" | "INTERMEDIATE" | "ADVANCED";
+
+export interface CoachLevelPricing {
+  BEGINNER: number; // in paise
+  INTERMEDIATE: number; // in paise
+  ADVANCED: number; // in paise
+}
+
+export interface CoachItem {
+  id: string;
+  clubId: string;
+  name: string;
+  title: string | null;
+  bio: string | null;
+  phone: string | null;
+  email: string | null;
+  photoUrl: string | null;
+  hourlyFee: number;
+  pricing: CoachLevelPricing;
+  levels: CoachingLevel[];
+  availableDays: string[];
+  availableTimeSlots: string[];
+  active: boolean;
+}
+
+export interface CoachingBookingItem {
+  id: string;
+  clubId: string;
+  coachId: string;
+  coachName: string;
+  userId: string;
+  userName: string;
+  sessionDate: string;
+  dayOfWeek: string;
+  timeSlot: string;
+  level: CoachingLevel;
+  notes: string | null;
+  fee: number;
+  status: "CONFIRMED" | "COMPLETED" | "CANCELLED";
+  createdAt: string;
 }

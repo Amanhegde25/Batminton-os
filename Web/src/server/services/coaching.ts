@@ -5,7 +5,20 @@ import { audit } from "./audit";
 import { notify } from "./notifications";
 import type { SessionUser } from "@/server/auth/types";
 import { requireStaff, getClubContext } from "@/server/rbac";
-import { DAYS_OF_WEEK, DEFAULT_COACHING_SLOTS, type DayOfWeek } from "@/lib/constants";
+import {
+  DAYS_OF_WEEK,
+  DEFAULT_COACHING_SLOTS,
+  COACHING_LEVELS,
+  COACHING_LEVEL_LABELS,
+  type DayOfWeek,
+  type CoachingLevel
+} from "@/lib/constants";
+
+export interface CoachLevelPricing {
+  BEGINNER: number; // in paise
+  INTERMEDIATE: number; // in paise
+  ADVANCED: number; // in paise
+}
 
 export interface CoachRecord {
   id: string;
@@ -16,7 +29,9 @@ export interface CoachRecord {
   phone?: string | null;
   email?: string | null;
   photoUrl?: string | null;
-  hourlyFee: number; // in paise (e.g. 50000 = ₹500)
+  hourlyFee: number; // legacy fallback / base fee in paise
+  pricing: CoachLevelPricing;
+  levels: CoachingLevel[];
   availableDays: string[];
   availableTimeSlots: string[];
   active: boolean;
@@ -36,6 +51,7 @@ export interface CoachingBookingRecord {
   sessionDate: string; // YYYY-MM-DD
   dayOfWeek: string;
   timeSlot: string;
+  level: CoachingLevel;
   notes?: string | null;
   fee: number;
   status: "CONFIRMED" | "COMPLETED" | "CANCELLED";
@@ -51,6 +67,8 @@ export interface CreateCoachInput {
   email?: string;
   photoUrl?: string;
   hourlyFee?: number; // In paise
+  pricing?: Partial<CoachLevelPricing>;
+  levels?: CoachingLevel[];
   availableDays?: string[];
   availableTimeSlots?: string[];
 }
@@ -63,6 +81,8 @@ export interface UpdateCoachInput {
   email?: string;
   photoUrl?: string;
   hourlyFee?: number;
+  pricing?: Partial<CoachLevelPricing>;
+  levels?: CoachingLevel[];
   availableDays?: string[];
   availableTimeSlots?: string[];
   active?: boolean;
@@ -72,6 +92,7 @@ export interface BookSessionInput {
   coachId: string;
   sessionDate: string; // "YYYY-MM-DD"
   timeSlot: string; // "07:00 - 08:00"
+  level: CoachingLevel;
   notes?: string;
 }
 
@@ -84,22 +105,36 @@ export async function listCoaches(clubId: string, onlyActive = false): Promise<C
     filter.active = true;
   }
   const items = await coaches().find(filter).sort({ name: 1 }).toArray();
-  return items.map((c) => ({
-    id: c.id as string,
-    clubId: c.clubId as string,
-    name: c.name as string,
-    title: (c.title as string) || null,
-    bio: (c.bio as string) || null,
-    phone: (c.phone as string) || null,
-    email: (c.email as string) || null,
-    photoUrl: (c.photoUrl as string) || null,
-    hourlyFee: typeof c.hourlyFee === "number" ? c.hourlyFee : 0,
-    availableDays: Array.isArray(c.availableDays) ? c.availableDays : [...DAYS_OF_WEEK],
-    availableTimeSlots: Array.isArray(c.availableTimeSlots) ? c.availableTimeSlots : [...DEFAULT_COACHING_SLOTS],
-    active: c.active !== false,
-    createdAt: (c.createdAt as Date) || new Date(),
-    updatedAt: (c.updatedAt as Date) || new Date()
-  }));
+  return items.map((c) => {
+    const baseFee = typeof c.hourlyFee === "number" && c.hourlyFee >= 0 ? c.hourlyFee : 50000;
+    const rawPricing = (c.pricing as Partial<CoachLevelPricing> | undefined) || {};
+    const pricing: CoachLevelPricing = {
+      BEGINNER: typeof rawPricing.BEGINNER === "number" && rawPricing.BEGINNER >= 0 ? rawPricing.BEGINNER : baseFee,
+      INTERMEDIATE: typeof rawPricing.INTERMEDIATE === "number" && rawPricing.INTERMEDIATE >= 0 ? rawPricing.INTERMEDIATE : Math.round(baseFee * 1.25),
+      ADVANCED: typeof rawPricing.ADVANCED === "number" && rawPricing.ADVANCED >= 0 ? rawPricing.ADVANCED : Math.round(baseFee * 1.6)
+    };
+    const rawLevels = Array.isArray(c.levels) && c.levels.length > 0 ? (c.levels as string[]) : [...COACHING_LEVELS];
+    const levels = rawLevels.filter((lvl: string) => COACHING_LEVELS.includes(lvl as CoachingLevel)) as CoachingLevel[];
+
+    return {
+      id: c.id as string,
+      clubId: c.clubId as string,
+      name: c.name as string,
+      title: (c.title as string) || null,
+      bio: (c.bio as string) || null,
+      phone: (c.phone as string) || null,
+      email: (c.email as string) || null,
+      photoUrl: (c.photoUrl as string) || null,
+      hourlyFee: pricing.BEGINNER,
+      pricing,
+      levels: levels.length > 0 ? levels : [...COACHING_LEVELS],
+      availableDays: Array.isArray(c.availableDays) ? c.availableDays : [...DAYS_OF_WEEK],
+      availableTimeSlots: Array.isArray(c.availableTimeSlots) ? c.availableTimeSlots : [...DEFAULT_COACHING_SLOTS],
+      active: c.active !== false,
+      createdAt: (c.createdAt as Date) || new Date(),
+      updatedAt: (c.updatedAt as Date) || new Date()
+    };
+  });
 }
 
 /**
@@ -124,6 +159,16 @@ export async function createCoach(
     ? input.availableTimeSlots.map((s) => s.trim()).filter(Boolean)
     : [...DEFAULT_COACHING_SLOTS];
 
+  const baseFee = typeof input.hourlyFee === "number" && input.hourlyFee >= 0 ? input.hourlyFee : 50000;
+  const pricing: CoachLevelPricing = {
+    BEGINNER: typeof input.pricing?.BEGINNER === "number" && input.pricing.BEGINNER >= 0 ? input.pricing.BEGINNER : baseFee,
+    INTERMEDIATE: typeof input.pricing?.INTERMEDIATE === "number" && input.pricing.INTERMEDIATE >= 0 ? input.pricing.INTERMEDIATE : Math.round(baseFee * 1.25),
+    ADVANCED: typeof input.pricing?.ADVANCED === "number" && input.pricing.ADVANCED >= 0 ? input.pricing.ADVANCED : Math.round(baseFee * 1.6)
+  };
+  const levels = input.levels && input.levels.length > 0
+    ? (input.levels.filter((lvl) => COACHING_LEVELS.includes(lvl)) as CoachingLevel[])
+    : [...COACHING_LEVELS];
+
   const id = cuid();
   const now = new Date();
   const coachDoc = {
@@ -135,7 +180,9 @@ export async function createCoach(
     phone: input.phone?.trim() || null,
     email: input.email?.trim() || null,
     photoUrl: input.photoUrl?.trim() || null,
-    hourlyFee: typeof input.hourlyFee === "number" && input.hourlyFee >= 0 ? input.hourlyFee : 0,
+    hourlyFee: pricing.BEGINNER,
+    pricing,
+    levels: levels.length > 0 ? levels : [...COACHING_LEVELS],
     availableDays: days,
     availableTimeSlots: slots,
     active: true,
@@ -151,7 +198,7 @@ export async function createCoach(
     action: "coach.created",
     entityType: "Coach",
     entityId: id,
-    newValue: { name: coachDoc.name, hourlyFee: coachDoc.hourlyFee }
+    newValue: { name: coachDoc.name, pricing: coachDoc.pricing, levels: coachDoc.levels }
   });
 
   return coachDoc;
@@ -183,6 +230,23 @@ export async function updateCoach(
   if (input.email !== undefined) updates.email = input.email?.trim() || null;
   if (input.photoUrl !== undefined) updates.photoUrl = input.photoUrl?.trim() || null;
   if (input.hourlyFee !== undefined) updates.hourlyFee = Math.max(0, input.hourlyFee);
+  if (input.pricing !== undefined) {
+    const currentPricing = (existing.pricing as Partial<CoachLevelPricing> | undefined) || {};
+    const baseFee = typeof existing.hourlyFee === "number" ? existing.hourlyFee : 50000;
+    updates.pricing = {
+      BEGINNER: typeof input.pricing.BEGINNER === "number" ? Math.max(0, input.pricing.BEGINNER) : (currentPricing.BEGINNER ?? baseFee),
+      INTERMEDIATE: typeof input.pricing.INTERMEDIATE === "number" ? Math.max(0, input.pricing.INTERMEDIATE) : (currentPricing.INTERMEDIATE ?? Math.round(baseFee * 1.25)),
+      ADVANCED: typeof input.pricing.ADVANCED === "number" ? Math.max(0, input.pricing.ADVANCED) : (currentPricing.ADVANCED ?? Math.round(baseFee * 1.6))
+    };
+    updates.hourlyFee = (updates.pricing as CoachLevelPricing).BEGINNER;
+  }
+  if (input.levels !== undefined) {
+    const valid = input.levels.filter((lvl) => COACHING_LEVELS.includes(lvl));
+    if (valid.length === 0) {
+      throw ApiError.badRequest("Coach must offer at least one coaching level");
+    }
+    updates.levels = valid;
+  }
   if (input.active !== undefined) updates.active = Boolean(input.active);
   if (input.availableDays !== undefined) {
     updates.availableDays = input.availableDays
@@ -281,6 +345,18 @@ export async function bookCoachingSession(
     );
   }
 
+  if (!input.level || !COACHING_LEVELS.includes(input.level)) {
+    throw ApiError.badRequest("Please select a coaching level (Beginner, Intermediate, or Advanced)");
+  }
+
+  const coachLevels = Array.isArray(coach.levels) && coach.levels.length > 0
+    ? (coach.levels as CoachingLevel[])
+    : [...COACHING_LEVELS];
+  if (!coachLevels.includes(input.level)) {
+    const levelLabel = COACHING_LEVEL_LABELS[input.level] || input.level;
+    throw ApiError.badRequest(`${coach.name} does not offer coaching for ${levelLabel} level.`);
+  }
+
   // Conflict check: Check if coach is already booked for this date and timeslot
   const conflict = await coachingBookings().findOne({
     clubId,
@@ -293,6 +369,15 @@ export async function bookCoachingSession(
     throw ApiError.conflict(
       `${coach.name} is already booked for ${input.timeSlot} on ${input.sessionDate}. Please pick another slot.`
     );
+  }
+
+  // Determine the level-specific fee
+  const coachPricing = (coach.pricing as Partial<CoachLevelPricing> | undefined) || {};
+  let fee = 0;
+  if (typeof coachPricing[input.level] === "number" && coachPricing[input.level]! >= 0) {
+    fee = coachPricing[input.level]!;
+  } else if (typeof coach.hourlyFee === "number" && coach.hourlyFee >= 0) {
+    fee = coach.hourlyFee;
   }
 
   const id = cuid();
@@ -308,8 +393,9 @@ export async function bookCoachingSession(
     sessionDate: input.sessionDate,
     dayOfWeek,
     timeSlot: input.timeSlot.trim(),
+    level: input.level,
     notes: input.notes?.trim() || null,
-    fee: typeof coach.hourlyFee === "number" ? coach.hourlyFee : 0,
+    fee,
     status: "CONFIRMED" as const,
     createdAt: now,
     updatedAt: now
@@ -323,8 +409,8 @@ export async function bookCoachingSession(
     clubId,
     type: "COACHING_BOOKED",
     title: "Coaching Session Confirmed! 🏸",
-    body: `Your session with ${coach.name} is booked for ${input.sessionDate} (${dayOfWeek}) at ${input.timeSlot}.`,
-    data: { bookingId: id, coachId: coach.id, sessionDate: input.sessionDate, timeSlot: input.timeSlot }
+    body: `Your ${COACHING_LEVEL_LABELS[input.level]} coaching session with ${coach.name} is booked for ${input.sessionDate} (${dayOfWeek}) at ${input.timeSlot}.`,
+    data: { bookingId: id, coachId: coach.id, sessionDate: input.sessionDate, timeSlot: input.timeSlot, level: input.level }
   });
 
   return bookingDoc;
@@ -373,6 +459,7 @@ export async function listCoachingBookings(
     sessionDate: b.sessionDate as string,
     dayOfWeek: b.dayOfWeek as string,
     timeSlot: b.timeSlot as string,
+    level: (b.level as CoachingLevel) || "BEGINNER",
     notes: (b.notes as string) || null,
     fee: typeof b.fee === "number" ? b.fee : 0,
     status: (b.status as "CONFIRMED" | "COMPLETED" | "CANCELLED") || "CONFIRMED",

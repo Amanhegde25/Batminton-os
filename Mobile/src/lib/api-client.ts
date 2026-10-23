@@ -29,7 +29,12 @@ import type {
   ClubSettings,
   ClubDetail,
   PlayGroupDetail,
-  PlayGroupPostItem
+  PlayGroupPostItem,
+  CoachItem,
+  CoachingBookingItem,
+  CoachingLevel,
+  PlayerMatchHistoryItem,
+  MatchHistoryResponse
 } from "./types";
 import type { LoginInput, RegisterInput } from "./schemas";
 
@@ -205,7 +210,25 @@ export function createApiClient(config: ApiClientConfig) {
       act: (clubId: string, matchId: string, data: Record<string, unknown>) =>
         request<any>(`/api/clubs/${clubId}/matches/${matchId}`, { method: "POST", json: data }),
       create: (clubId: string, data: unknown) =>
-        request<MatchRow>(`/api/clubs/${clubId}/matches`, { method: "POST", json: data })
+        request<MatchRow>(`/api/clubs/${clubId}/matches`, { method: "POST", json: data }),
+      history: (params?: {
+        q?: string;
+        clubId?: string;
+        outcome?: "ALL" | "WON" | "LOST";
+        status?: string;
+        page?: number;
+        pageSize?: number;
+      }) => {
+        const qs = new URLSearchParams();
+        if (params?.q) qs.set("q", params.q);
+        if (params?.clubId) qs.set("clubId", params.clubId);
+        if (params?.outcome) qs.set("outcome", params.outcome);
+        if (params?.status) qs.set("status", params.status);
+        if (params?.page) qs.set("page", String(params.page));
+        if (params?.pageSize) qs.set("pageSize", String(params.pageSize));
+        const queryStr = qs.toString();
+        return request<MatchHistoryResponse>(`/api/matches/history${queryStr ? `?${queryStr}` : ""}`);
+      }
     },
 
     // 5. Matchmaking
@@ -278,12 +301,43 @@ export function createApiClient(config: ApiClientConfig) {
         })
     },
 
-    // 10. Coaching
+    // 10. Coaching (AI Insights)
     coaching: {
       get: (clubId: string, userId?: string) =>
         request<CoachingInsight>(
           `/api/clubs/${clubId}/coaching${userId ? `?userId=${userId}` : ""}`
         )
+    },
+
+    // 10b. Club Coaches & Training Sessions
+    coaches: {
+      list: (clubId: string, onlyActive = true) =>
+        request<{ items: CoachItem[] }>(`/api/clubs/${clubId}/coaches?onlyActive=${onlyActive}`),
+      bookings: (clubId: string, options?: { myOnly?: boolean; coachId?: string; status?: string }) => {
+        const qs = new URLSearchParams();
+        if (options?.myOnly) qs.set("myOnly", "true");
+        if (options?.coachId) qs.set("coachId", options.coachId);
+        if (options?.status) qs.set("status", options.status);
+        const qStr = qs.toString();
+        return request<{ items: CoachingBookingItem[] }>(
+          `/api/clubs/${clubId}/coaches/bookings${qStr ? `?${qStr}` : ""}`
+        );
+      },
+      book: (
+        clubId: string,
+        data: { coachId: string; sessionDate: string; timeSlot: string; level: CoachingLevel; notes?: string }
+      ) =>
+        request<CoachingBookingItem>(`/api/clubs/${clubId}/coaches/bookings`, { method: "POST", json: data }),
+      cancelBooking: (clubId: string, bookingId: string, reason?: string) =>
+        request<CoachingBookingItem>(`/api/clubs/${clubId}/coaches/bookings/${bookingId}`, {
+          method: "PATCH",
+          json: { action: "cancel", reason }
+        }),
+      updateStatus: (clubId: string, bookingId: string, status: "CONFIRMED" | "COMPLETED" | "CANCELLED") =>
+        request<CoachingBookingItem>(`/api/clubs/${clubId}/coaches/bookings/${bookingId}`, {
+          method: "PATCH",
+          json: { status }
+        })
     },
 
     // 11. Videos

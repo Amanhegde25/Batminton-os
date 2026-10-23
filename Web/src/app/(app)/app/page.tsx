@@ -116,6 +116,7 @@ interface CoachingBookingItem {
   dayOfWeek: string;
   status: string;
   fee: number;
+  level?: string;
 }
 
 interface AdminStats {

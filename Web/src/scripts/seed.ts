@@ -22,6 +22,7 @@ import { createTournament, startTournament, submitScore } from "../server/servic
 import { runDailySweep } from "../server/services/attendance";
 import { issueManual } from "../server/services/penalties";
 import { createGroup, createGroupSession, rsvpSession, joinGroup } from "../server/services/groups";
+import { createCoach } from "../server/services/coaching";
 import { randomValidSet, scoreToString, type SetScore } from "../lib/engines/scoring";
 import { cuid } from "../lib/id";
 
@@ -173,6 +174,39 @@ async function main() {
       });
     }
   }
+
+  console.log("🏸 Seeding club coaches with 3 levels & distinct pricing…");
+  await createCoach(clubA.id, ownerA, {
+    name: "Ramesh Padukone",
+    title: "Head Coach • BWF Certified Level 2",
+    bio: "Ex-national circuit player specializing in singles footwork, deceptive drops, and competitive match preparation.",
+    phone: "+91 98450 12345",
+    email: "ramesh.coach@bcos.app",
+    pricing: {
+      BEGINNER: 45000,     // ₹450/hr
+      INTERMEDIATE: 70000, // ₹700/hr
+      ADVANCED: 95000      // ₹950/hr
+    },
+    levels: ["BEGINNER", "INTERMEDIATE", "ADVANCED"],
+    availableDays: ["MONDAY", "WEDNESDAY", "FRIDAY", "SATURDAY", "SUNDAY"],
+    availableTimeSlots: ["06:00 - 07:00", "07:00 - 08:00", "17:00 - 18:00", "18:00 - 19:00", "19:00 - 20:00"]
+  });
+
+  await createCoach(clubA.id, ownerA, {
+    name: "Ananya Sharma",
+    title: "Junior & Intermediate Development Coach",
+    bio: "Focuses on racket speed, high clears, baseline defence, and tactical rally construction.",
+    phone: "+91 98451 54321",
+    email: "ananya.coach@bcos.app",
+    pricing: {
+      BEGINNER: 35000,     // ₹350/hr
+      INTERMEDIATE: 55000, // ₹550/hr
+      ADVANCED: 80000      // ₹800/hr
+    },
+    levels: ["BEGINNER", "INTERMEDIATE"],
+    availableDays: ["TUESDAY", "THURSDAY", "SATURDAY", "SUNDAY"],
+    availableTimeSlots: ["07:00 - 08:00", "08:00 - 09:00", "16:00 - 17:00", "17:00 - 18:00"]
+  });
 
   console.log("📅 Attendance history (35 days)…");
   const attendanceRows: {

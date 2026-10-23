@@ -20,6 +20,9 @@ const bookSchema = z.object({
   coachId: z.string().min(1),
   sessionDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format (YYYY-MM-DD)"),
   timeSlot: z.string().min(1),
+  level: z.enum(["BEGINNER", "INTERMEDIATE", "ADVANCED"], {
+    errorMap: () => ({ message: "Please select a coaching level (Beginner, Intermediate, or Advanced)" })
+  }),
   notes: z.string().max(300).optional()
 });
 

@@ -22,7 +22,8 @@ import {
   User,
   ChevronRight,
   ShieldCheck,
-  Building
+  Building,
+  Award
 } from "lucide-react-native";
 import { useAuth } from "../../src/context/auth";
 import { useClub } from "../../src/context/club";
@@ -161,8 +162,17 @@ export default function HubScreen() {
 
         {/* Performance & Training */}
         <View style={styles.section}>
-          <Text style={styles.sectionHeader}>Performance & AI</Text>
+          <Text style={styles.sectionHeader}>Performance & Training</Text>
           <Card style={styles.menuCard}>
+            {renderHubItem({
+              title: "Club Coaches & Training",
+              subtitle: "Book certified coaches, select level & manage sessions",
+              icon: Award,
+              iconColor: colors.primary,
+              bgColor: "rgba(16, 185, 129, 0.15)",
+              route: "/coaching"
+            })}
+            <View style={styles.menuDivider} />
             {renderHubItem({
               title: "AI Coaching Insights",
               subtitle: "Personalized drill recommendations & weakness focus",

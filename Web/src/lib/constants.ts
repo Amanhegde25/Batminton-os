@@ -139,6 +139,18 @@ export const TOURNAMENT_STATUSES = ["REGISTRATION", "ONGOING", "COMPLETED"] as c
 export const TOURNAMENT_SIZES = [4, 8, 16, 32] as const;
 
 export const SKILL_LEVELS = ["BEGINNER", "INTERMEDIATE", "ADVANCED", "PROFESSIONAL"] as const;
+export const COACHING_LEVELS = ["BEGINNER", "INTERMEDIATE", "ADVANCED"] as const;
+export type CoachingLevel = (typeof COACHING_LEVELS)[number];
+export const COACHING_LEVEL_LABELS: Record<CoachingLevel, string> = {
+  BEGINNER: "Beginner",
+  INTERMEDIATE: "Intermediate",
+  ADVANCED: "Advanced"
+};
+export const COACHING_LEVEL_DESCRIPTIONS: Record<CoachingLevel, string> = {
+  BEGINNER: "Grip fundamentals, footwork basics & stroke technique",
+  INTERMEDIATE: "Rally control, clears, drops, smashes & consistency",
+  ADVANCED: "Match strategy, deception, speed & high-tempo tactics"
+};
 export const PLAY_STYLES = ["ATTACKING_SMASH", "DEFENSIVE_CLEAR", "ALL_ROUND", "NET_PLAYER", "DECEPTIVE"] as const;
 export const DOMINANT_HANDS = ["RIGHT", "LEFT"] as const;
 export const TIME_PREFERENCES = ["MORNING", "AFTERNOON", "EVENING", "NIGHT"] as const;

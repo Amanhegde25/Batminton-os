@@ -12,6 +12,14 @@ const updateSchema = z.object({
   email: z.string().email().optional().or(z.literal("")),
   photoUrl: z.string().url().optional().or(z.literal("")),
   hourlyFee: z.number().min(0).optional(),
+  pricing: z
+    .object({
+      BEGINNER: z.number().min(0).optional(),
+      INTERMEDIATE: z.number().min(0).optional(),
+      ADVANCED: z.number().min(0).optional()
+    })
+    .optional(),
+  levels: z.array(z.enum(["BEGINNER", "INTERMEDIATE", "ADVANCED"])).optional(),
   availableDays: z.array(z.string()).optional(),
   availableTimeSlots: z.array(z.string()).optional(),
   active: z.boolean().optional()

@@ -67,18 +67,27 @@ describe("Coaching System: Coach Management and Session Bookings", () => {
       })
     ).rejects.toThrow();
 
-    // 2. Club admin/owner creates a coach
+    // 2. Club admin/owner creates a coach with 3 skill levels & custom pricing
     const coach = await createCoach(club.id, ownerActor, {
       name: "Coach Pullela",
       title: "Senior Elite Coach",
       bio: "Focuses on explosive smash power and defensive recovery",
-      hourlyFee: 75000, // ₹750/hr
+      pricing: {
+        BEGINNER: 40000,     // ₹400/hr
+        INTERMEDIATE: 65000, // ₹650/hr
+        ADVANCED: 90000      // ₹900/hr
+      },
+      levels: ["BEGINNER", "INTERMEDIATE", "ADVANCED"],
       availableDays: ["MONDAY", "WEDNESDAY", "FRIDAY", "SATURDAY"],
       availableTimeSlots: ["06:00 - 07:00", "07:00 - 08:00", "18:00 - 19:00"]
     });
 
     expect(coach.id).toBeDefined();
     expect(coach.name).toBe("Coach Pullela");
+    expect(coach.pricing.BEGINNER).toBe(40000);
+    expect(coach.pricing.INTERMEDIATE).toBe(65000);
+    expect(coach.pricing.ADVANCED).toBe(90000);
+    expect(coach.levels).toEqual(["BEGINNER", "INTERMEDIATE", "ADVANCED"]);
     expect(coach.availableDays).toContain("MONDAY");
     expect(coach.availableTimeSlots).toContain("06:00 - 07:00");
     expect(coach.active).toBe(true);
@@ -87,16 +96,22 @@ describe("Coaching System: Coach Management and Session Bookings", () => {
     const coaches = await listCoaches(club.id, true);
     expect(coaches.some((c) => c.id === coach.id)).toBe(true);
 
-    // 3. Update coach details
+    // 3. Update coach details and level pricing
     const updated = await updateCoach(club.id, coach.id, ownerActor, {
-      hourlyFee: 80000,
+      pricing: {
+        BEGINNER: 45000,
+        INTERMEDIATE: 70000,
+        ADVANCED: 95000
+      },
       title: "Chief National Mentor"
     });
-    expect(updated.hourlyFee).toBe(80000);
+    expect(updated.pricing.BEGINNER).toBe(45000);
+    expect(updated.pricing.INTERMEDIATE).toBe(70000);
+    expect(updated.pricing.ADVANCED).toBe(95000);
     expect(updated.title).toBe("Chief National Mentor");
   });
 
-  it("allows users to book coaching sessions on valid days and prevents double booking", async () => {
+  it("allows users to book coaching sessions with selected level and verifies level-specific pricing", async () => {
     const allUsers = await users().find().limit(3).toArray();
     const ownerUser = allUsers[0] as any;
     const playerUser = allUsers[1] as any;
@@ -139,17 +154,21 @@ describe("Coaching System: Coach Management and Session Bookings", () => {
     });
     await clubMembers().updateOne({ id: playerMember.id }, { $set: { userId: playerUser.id } });
 
-    // Coach available only on Saturday and Sunday
+    // Coach offers BEGINNER and INTERMEDIATE with distinct costs set by club admin
     const coach = await createCoach(club.id, ownerActor, {
       name: "Coach Gopichand",
-      hourlyFee: 100000,
+      pricing: {
+        BEGINNER: 50000,     // ₹500
+        INTERMEDIATE: 80000, // ₹800
+        ADVANCED: 120000     // ₹1200
+      },
+      levels: ["BEGINNER", "INTERMEDIATE"],
       availableDays: ["SATURDAY", "SUNDAY"],
       availableTimeSlots: ["08:00 - 09:00", "09:00 - 10:00"]
     });
 
     // Pick upcoming Saturday date
     const d = new Date();
-    // Next Saturday
     d.setDate(d.getDate() + ((6 - d.getDay() + 7) % 7 || 7));
     const saturdayStr = d.toISOString().split("T")[0];
 
@@ -163,15 +182,27 @@ describe("Coaching System: Coach Management and Session Bookings", () => {
       bookCoachingSession(club.id, playerActor, {
         coachId: coach.id,
         sessionDate: tuesdayStr,
-        timeSlot: "08:00 - 09:00"
+        timeSlot: "08:00 - 09:00",
+        level: "BEGINNER"
       })
     ).rejects.toThrow("not available on TUESDAY");
 
-    // 2. Book valid session on Saturday
+    // 2. Attempt to book for a level NOT offered by coach -> should fail
+    await expect(
+      bookCoachingSession(club.id, playerActor, {
+        coachId: coach.id,
+        sessionDate: saturdayStr,
+        timeSlot: "08:00 - 09:00",
+        level: "ADVANCED"
+      })
+    ).rejects.toThrow("does not offer coaching for Advanced level");
+
+    // 3. Book valid INTERMEDIATE session on Saturday -> fee must equal intermediate cost (₹800 = 80000 paise)
     const booking1 = await bookCoachingSession(club.id, playerActor, {
       coachId: coach.id,
       sessionDate: saturdayStr,
       timeSlot: "08:00 - 09:00",
+      level: "INTERMEDIATE",
       notes: "Tactical positioning and jump smashes"
     });
 
@@ -179,31 +210,38 @@ describe("Coaching System: Coach Management and Session Bookings", () => {
     expect(booking1.status).toBe("CONFIRMED");
     expect(booking1.sessionDate).toBe(saturdayStr);
     expect(booking1.timeSlot).toBe("08:00 - 09:00");
+    expect(booking1.level).toBe("INTERMEDIATE");
+    expect(booking1.fee).toBe(80000);
     expect(booking1.coachName).toBe("Coach Gopichand");
 
-    // 3. Attempting double-booking on the exact same date & slot -> throws conflict
+    // 4. Attempting double-booking on the exact same date & slot -> throws conflict
     await expect(
       bookCoachingSession(club.id, playerActor, {
         coachId: coach.id,
         sessionDate: saturdayStr,
-        timeSlot: "08:00 - 09:00"
+        timeSlot: "08:00 - 09:00",
+        level: "BEGINNER"
       })
     ).rejects.toThrow("already booked");
 
-    // 4. List bookings
+    // 5. List bookings & verify level is returned
     const bookings = await listCoachingBookings(club.id, playerActor, { myOnly: true });
-    expect(bookings.some((b) => b.id === booking1.id)).toBe(true);
+    expect(bookings.some((b) => b.id === booking1.id && b.level === "INTERMEDIATE")).toBe(true);
 
-    // 5. Staff updates booking status to COMPLETED
+    // 6. Staff updates booking status to COMPLETED
     const completed = await updateBookingStatus(club.id, booking1.id, ownerActor, "COMPLETED");
     expect(completed.status).toBe("COMPLETED");
 
-    // 6. User can cancel their own booking (when booking another slot)
+    // 7. Book another session for BEGINNER -> fee must equal beginner cost (₹500 = 50000 paise)
     const booking2 = await bookCoachingSession(club.id, playerActor, {
       coachId: coach.id,
       sessionDate: saturdayStr,
-      timeSlot: "09:00 - 10:00"
+      timeSlot: "09:00 - 10:00",
+      level: "BEGINNER"
     });
+    expect(booking2.level).toBe("BEGINNER");
+    expect(booking2.fee).toBe(50000);
+
     const cancelled = await cancelCoachingBooking(club.id, booking2.id, playerActor, "Personal schedule change");
     expect(cancelled.status).toBe("CANCELLED");
   });

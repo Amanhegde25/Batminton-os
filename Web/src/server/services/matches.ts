@@ -532,3 +532,231 @@ export function serializeMatch(m: MatchWithRelations) {
 export function todayKey(): string {
   return dayKey();
 }
+
+export interface UserMatchHistoryOptions {
+  q?: string;
+  clubId?: string;
+  outcome?: "ALL" | "WON" | "LOST";
+  status?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+export async function listUserMatchHistory(userId: string, opts: UserMatchHistoryOptions = {}) {
+  const page = Math.max(1, opts.page ?? 1);
+  const pageSize = Math.min(50, Math.max(5, opts.pageSize ?? 20));
+
+  // 1. Find all matches where user is a participant
+  const userEntries = await matchPlayers().find({ userId }).toArray();
+  if (userEntries.length === 0) {
+    return { items: [], total: 0, page, pageSize, clubs: [] };
+  }
+
+  const userMatchIds = Array.from(new Set(userEntries.map((e) => e.matchId as string)));
+
+  // 2. Discover all clubs this user has played at
+  const allUserMatches = await matches()
+    .find({ id: { $in: userMatchIds }, deletedAt: null }, { projection: { clubId: 1 } })
+    .toArray();
+  const playedClubIds = Array.from(new Set(allUserMatches.map((m) => m.clubId as string)));
+
+  const { clubs } = await import("@/server/db");
+  const clubsList = playedClubIds.length > 0
+    ? await clubs().find(
+        { id: { $in: playedClubIds }, deletedAt: null },
+        { projection: { id: 1, name: 1, slug: 1, logoUrl: 1, _id: 0 } }
+      ).toArray()
+    : [];
+  const clubMap = new Map(clubsList.map((c) => [c.id as string, c]));
+
+  // 3. Filter matches
+  const matchFilter: Record<string, unknown> = {
+    id: { $in: userMatchIds },
+    deletedAt: null
+  };
+
+  if (opts.clubId && opts.clubId !== "ALL") {
+    matchFilter.clubId = opts.clubId;
+  }
+
+  if (opts.status && opts.status !== "ALL") {
+    matchFilter.status = opts.status;
+  } else if (!opts.status) {
+    // Default to finished matches for history
+    matchFilter.status = { $in: ["COMPLETED", "WALKOVER"] };
+  }
+
+  const rawMatches = await matches()
+    .find(matchFilter)
+    .sort({ endedAt: -1, scheduledAt: -1, createdAt: -1 })
+    .toArray();
+
+  if (rawMatches.length === 0) {
+    return {
+      items: [],
+      total: 0,
+      page,
+      pageSize,
+      clubs: clubsList.map((c) => ({ id: c.id as string, name: c.name as string }))
+    };
+  }
+
+  // 4. Batch fetch related details for these matches
+  const matchIds = rawMatches.map((m) => m.id as string);
+  const courtIds = rawMatches.map((m) => m.courtId).filter(Boolean) as string[];
+
+  const [allTeams, allPlayers, allScores, allCourts, allDeltas] = await Promise.all([
+    matchTeams().find({ matchId: { $in: matchIds } }).toArray(),
+    matchPlayers().find({ matchId: { $in: matchIds } }).toArray(),
+    matchScores().find({ matchId: { $in: matchIds } }).toArray(),
+    courtIds.length > 0 ? courts().find({ id: { $in: courtIds } }).toArray() : [],
+    ratingHistories().find({ matchId: { $in: matchIds }, userId }).toArray()
+  ]);
+
+  const playerUserIds = Array.from(new Set(allPlayers.map((p) => p.userId as string)));
+  const { users } = await import("@/server/db");
+  const usersData = playerUserIds.length > 0
+    ? await users().find(
+        { id: { $in: playerUserIds } },
+        { projection: { id: 1, name: 1, photoUrl: 1, _id: 0 } }
+      ).toArray()
+    : [];
+  const userMap = new Map(usersData.map((u) => [u.id as string, u]));
+  const courtMap = new Map(allCourts.map((c) => [c.id as string, c]));
+  const deltaMap = new Map(allDeltas.map((d) => [d.matchId as string, d.delta as number]));
+
+  // Index by matchId
+  const teamsByMatch = new Map<string, typeof allTeams>();
+  for (const t of allTeams) {
+    const arr = teamsByMatch.get(t.matchId as string) ?? [];
+    arr.push(t);
+    teamsByMatch.set(t.matchId as string, arr);
+  }
+
+  const playersByMatch = new Map<string, typeof allPlayers>();
+  for (const p of allPlayers) {
+    const arr = playersByMatch.get(p.matchId as string) ?? [];
+    arr.push(p);
+    playersByMatch.set(p.matchId as string, arr);
+  }
+
+  const scoresByMatch = new Map<string, typeof allScores>();
+  for (const s of allScores) {
+    const arr = scoresByMatch.get(s.matchId as string) ?? [];
+    arr.push(s);
+    scoresByMatch.set(s.matchId as string, arr);
+  }
+
+  // 5. Construct match items
+  const allItems = rawMatches.map((m) => {
+    const mTeams = teamsByMatch.get(m.id as string) ?? [];
+    const mPlayers = playersByMatch.get(m.id as string) ?? [];
+    const mScores = scoresByMatch.get(m.id as string) ?? [];
+
+    const myPlayerEntry = mPlayers.find((p) => p.userId === userId);
+    const myTeam = mTeams.find((t) => t.id === myPlayerEntry?.teamId);
+    const playerTeamIndex = (myTeam?.teamIndex as number) ?? 0;
+
+    const winnerTeamIndex = (m.winnerTeamIndex as number) ?? null;
+    const won = winnerTeamIndex !== null ? winnerTeamIndex === playerTeamIndex : null;
+
+    const club = clubMap.get(m.clubId as string) ?? {
+      id: m.clubId as string,
+      name: "Badminton Club",
+      slug: ""
+    };
+
+    const courtDoc = m.courtId ? courtMap.get(m.courtId as string) : null;
+    const court = courtDoc ? { id: courtDoc.id as string, name: courtDoc.name as string, number: courtDoc.number as number } : null;
+
+    const teams = [0, 1].map((idx) => {
+      const team = mTeams.find((t) => t.teamIndex === idx);
+      const players = team
+        ? mPlayers
+            .filter((p) => p.teamId === team.id)
+            .map((p) => {
+              const u = userMap.get(p.userId as string);
+              return {
+                id: p.userId as string,
+                name: (u?.name as string) ?? "Player",
+                photoUrl: (u?.photoUrl as string) ?? null
+              };
+            })
+        : [];
+      return { teamIndex: idx, players };
+    });
+
+    const myTeamPlayers = teams.find((t) => t.teamIndex === playerTeamIndex)?.players ?? [];
+    const otherTeamPlayers = teams.find((t) => t.teamIndex === 1 - playerTeamIndex)?.players ?? [];
+
+    const partners = myTeamPlayers.filter((p) => p.id !== userId);
+    const opponents = otherTeamPlayers;
+
+    const sortedScores = [...mScores]
+      .sort((a, b) => (a.setNumber as number) - (b.setNumber as number))
+      .map((s) => ({
+        setNumber: s.setNumber as number,
+        a: s.scoreA as number,
+        b: s.scoreB as number
+      }));
+
+    const delta = deltaMap.get(m.id as string);
+    const ratingChange = delta !== undefined ? Math.round(delta) : null;
+
+    return {
+      id: m.id as string,
+      clubId: m.clubId as string,
+      club: {
+        id: club.id as string,
+        name: club.name as string,
+        slug: (club.slug as string) ?? "",
+        logoUrl: (club.logoUrl as string) ?? null
+      },
+      type: m.type as string,
+      status: m.status as string,
+      scheduledAt: m.scheduledAt ? (m.scheduledAt as Date).toISOString() : null,
+      startedAt: m.startedAt ? (m.startedAt as Date).toISOString() : null,
+      endedAt: m.endedAt ? (m.endedAt as Date).toISOString() : null,
+      winnerTeamIndex,
+      isWalkover: (m.isWalkover as boolean) ?? false,
+      notes: (m.notes as string) ?? null,
+      court,
+      teams,
+      scores: sortedScores,
+      playerTeamIndex,
+      won,
+      opponents,
+      partners,
+      ratingChange
+    };
+  });
+
+  // 6. Filter by outcome and search query q
+  let filtered = allItems;
+  if (opts.outcome === "WON") {
+    filtered = filtered.filter((i) => i.won === true);
+  } else if (opts.outcome === "LOST") {
+    filtered = filtered.filter((i) => i.won === false);
+  }
+
+  if (opts.q && opts.q.trim()) {
+    const query = opts.q.trim().toLowerCase();
+    filtered = filtered.filter((i) => {
+      const matchClub = i.club.name.toLowerCase().includes(query);
+      const matchOpponent = i.opponents.some((o) => o.name.toLowerCase().includes(query));
+      const matchPartner = i.partners.some((p) => p.name.toLowerCase().includes(query));
+      return matchClub || matchOpponent || matchPartner;
+    });
+  }
+
+  const total = filtered.length;
+  const pagedItems = filtered.slice((page - 1) * pageSize, page * pageSize);
+
+  return {
+    items: pagedItems,
+    total,
+    page,
+    pageSize,
+    clubs: clubsList.map((c) => ({ id: c.id as string, name: c.name as string }))
+  };
+}

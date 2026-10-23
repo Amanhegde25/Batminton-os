@@ -9,7 +9,8 @@ import {
   ActivityIndicator,
   Modal,
   Alert,
-  ScrollView
+  ScrollView,
+  TextInput
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -23,7 +24,12 @@ import {
   ArrowLeftRight,
   Flag,
   Radio,
-  Grid
+  Grid,
+  Search,
+  Building2,
+  CheckCircle2,
+  XCircle,
+  Filter
 } from "lucide-react-native";
 import { useClub } from "../../src/context/club";
 import { api } from "../../src/lib/api";
@@ -31,7 +37,7 @@ import { colors } from "../../src/theme/colors";
 import { Card } from "../../src/components/Card";
 import { Badge } from "../../src/components/Badge";
 import { Button } from "../../src/components/Button";
-import type { MatchRow } from "../../src/lib/types";
+import type { MatchRow, PlayerMatchHistoryItem } from "../../src/lib/types";
 
 const TAB_STATUS: Record<string, string | undefined> = {
   live: "LIVE,IN_PROGRESS",
@@ -69,7 +75,12 @@ export default function MatchesScreen() {
   const { activeClubId, isStaff } = useClub();
   const router = useRouter();
   const queryClient = useQueryClient();
-  const [tab, setTab] = useState<"live" | "upcoming" | "done" | "all">("upcoming");
+  const [tab, setTab] = useState<"upcoming" | "live" | "done" | "all" | "history">("upcoming");
+
+  // History tab state
+  const [historySearch, setHistorySearch] = useState("");
+  const [historyClubId, setHistoryClubId] = useState<string>("ALL");
+  const [historyOutcome, setHistoryOutcome] = useState<"ALL" | "WON" | "LOST">("ALL");
 
   // Selected match for live scoring modal
   const [selectedMatch, setSelectedMatch] = useState<MatchRow | null>(null);
@@ -87,10 +98,30 @@ export default function MatchesScreen() {
         status: TAB_STATUS[tab],
         pageSize: 30
       }),
-    enabled: !!activeClubId
+    enabled: !!activeClubId && tab !== "history"
   });
 
   const matches = data?.items ?? [];
+
+  const {
+    data: historyData,
+    isLoading: isHistoryLoading,
+    isRefetching: isHistoryRefetching,
+    refetch: refetchHistory
+  } = useQuery({
+    queryKey: ["matchesHistory", historySearch, historyClubId, historyOutcome],
+    queryFn: () =>
+      api.matches.history({
+        q: historySearch.trim() || undefined,
+        clubId: historyClubId === "ALL" ? undefined : historyClubId,
+        outcome: historyOutcome === "ALL" ? undefined : historyOutcome,
+        pageSize: 50
+      }),
+    enabled: tab === "history"
+  });
+
+  const historyMatches = historyData?.items ?? [];
+  const playedClubs = historyData?.clubs ?? [];
 
   const teamNameA = selectedMatch?.teams?.[0]?.players?.map((p) => p.name).join(" & ") || "Team A";
   const teamNameB = selectedMatch?.teams?.[1]?.players?.map((p) => p.name).join(" & ") || "Team B";
@@ -295,6 +326,158 @@ export default function MatchesScreen() {
     );
   };
 
+  const renderHistoryItem = ({ item }: { item: PlayerMatchHistoryItem }) => {
+    const opponentNames = item.opponents.map((o) => o.name).join(" & ") || "Opponent";
+    const partnerNames = item.partners.map((p) => p.name).join(" & ");
+    const mySideName = partnerNames ? `You & ${partnerNames}` : "You";
+
+    const isWin = item.won === true;
+    const isLoss = item.won === false;
+
+    return (
+      <Card style={styles.historyCard}>
+        {/* Club header & Result badge */}
+        <View style={styles.historyCardHeader}>
+          <View style={styles.clubBadgeRow}>
+            <Building2 size={13} color={colors.primary} />
+            <Text style={styles.historyClubName} numberOfLines={1}>
+              {item.club.name}
+            </Text>
+            <View style={styles.typeTag}>
+              <Text style={styles.typeTagText}>{item.type}</Text>
+            </View>
+          </View>
+
+          <View style={styles.historyBadgeGroup}>
+            {item.isWalkover && (
+              <Badge label="WALKOVER" tone="warning" />
+            )}
+            {isWin && (
+              <View style={styles.winBadge}>
+                <CheckCircle2 size={12} color="#16a34a" />
+                <Text style={styles.winBadgeText}>WON</Text>
+              </View>
+            )}
+            {isLoss && (
+              <View style={styles.lossBadge}>
+                <XCircle size={12} color="#dc2626" />
+                <Text style={styles.lossBadgeText}>LOST</Text>
+              </View>
+            )}
+            {item.ratingChange !== null && (
+              <Text
+                style={[
+                  styles.ratingChangeText,
+                  item.ratingChange >= 0 ? styles.ratingPositive : styles.ratingNegative
+                ]}
+              >
+                {item.ratingChange >= 0 ? `+${item.ratingChange}` : item.ratingChange} pts
+              </Text>
+            )}
+          </View>
+        </View>
+
+        {/* Teams matchup */}
+        <View style={styles.matchupBox}>
+          {/* Your Team */}
+          <View style={styles.historyTeamRow}>
+            <View style={styles.teamDetails}>
+              {isWin && <Trophy size={14} color="#f59e0b" />}
+              <Text
+                style={[
+                  styles.historyTeamName,
+                  isWin && styles.historyWinnerName
+                ]}
+                numberOfLines={1}
+              >
+                {mySideName}
+              </Text>
+            </View>
+            {item.scores && item.scores.length > 0 && (
+              <Text style={[styles.historyScoreText, isWin && styles.winnerScoreText]}>
+                {item.scores.map((s) => (item.playerTeamIndex === 0 ? s.a : s.b)).join(" · ")}
+              </Text>
+            )}
+          </View>
+
+          <View style={styles.historyDivider} />
+
+          {/* Opponents Team */}
+          <View style={styles.historyTeamRow}>
+            <View style={styles.teamDetails}>
+              {isLoss && <Trophy size={14} color="#f59e0b" />}
+              <Text
+                style={[
+                  styles.historyTeamName,
+                  isLoss && styles.historyWinnerName
+                ]}
+                numberOfLines={1}
+              >
+                {opponentNames}
+              </Text>
+            </View>
+            {item.scores && item.scores.length > 0 && (
+              <Text style={[styles.historyScoreText, isLoss && styles.winnerScoreText]}>
+                {item.scores.map((s) => (item.playerTeamIndex === 0 ? s.b : s.a)).join(" · ")}
+              </Text>
+            )}
+          </View>
+        </View>
+
+        {/* Date, Court & Scores Footer */}
+        <View style={styles.historyCardFooter}>
+          <View style={styles.historyFooterMeta}>
+            <Clock size={12} color={colors.textMuted} />
+            <Text style={styles.historyDateText}>
+              {item.endedAt
+                ? new Date(item.endedAt).toLocaleDateString([], {
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric"
+                  })
+                : item.scheduledAt
+                ? new Date(item.scheduledAt).toLocaleDateString([], {
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric"
+                  })
+                : "Finished"}
+              {item.court ? ` • #${item.court.number} ${item.court.name}` : ""}
+            </Text>
+          </View>
+
+          {item.scores && item.scores.length > 0 && (
+            <View style={styles.setScoresPills}>
+              {item.scores.map((s, idx) => {
+                const myScore = item.playerTeamIndex === 0 ? s.a : s.b;
+                const oppScore = item.playerTeamIndex === 0 ? s.b : s.a;
+                const setWon = myScore > oppScore;
+                return (
+                  <View
+                    key={idx}
+                    style={[
+                      styles.setScorePill,
+                      setWon ? styles.setScorePillWon : styles.setScorePillLost
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.setScorePillText,
+                        setWon ? styles.setScoreWonText : styles.setScoreLostText
+                      ]}
+                    >
+                      {myScore}-{oppScore}
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
+          )}
+        </View>
+      </Card>
+    );
+  };
+
   return (
     <SafeAreaView edges={["top", "left", "right"]} style={styles.container}>
       {/* Header */}
@@ -314,21 +497,154 @@ export default function MatchesScreen() {
       </View>
 
       {/* Tabs Switcher */}
-      <View style={styles.tabsRow}>
-        {(["upcoming", "live", "done", "all"] as const).map((t) => (
-          <TouchableOpacity
-            key={t}
-            style={[styles.tabItem, tab === t && styles.tabItemActive]}
-            onPress={() => setTab(t)}
-          >
-            <Text style={[styles.tabText, tab === t && styles.tabTextActive]}>
-              {t.toUpperCase()}
-            </Text>
-          </TouchableOpacity>
-        ))}
+      <View style={{ marginBottom: 12 }}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.tabsRow}
+        >
+          {(["upcoming", "live", "done", "all", "history"] as const).map((t) => (
+            <TouchableOpacity
+              key={t}
+              style={[styles.tabItem, tab === t && styles.tabItemActive]}
+              onPress={() => setTab(t)}
+            >
+              <Text style={[styles.tabText, tab === t && styles.tabTextActive]}>
+                {t === "history" ? "HISTORY" : t.toUpperCase()}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
       </View>
 
-      {isLoading ? (
+      {/* When in History tab, show Search and Filter controls */}
+      {tab === "history" && (
+        <View style={styles.historyFiltersContainer}>
+          {/* Search Box */}
+          <View style={styles.historySearchBox}>
+            <Search size={16} color={colors.textMuted} />
+            <TextInput
+              value={historySearch}
+              onChangeText={setHistorySearch}
+              placeholder="Search opponents or clubs..."
+              placeholderTextColor={colors.textSubtle}
+              style={styles.historySearchInput}
+              returnKeyType="search"
+              autoCapitalize="none"
+              clearButtonMode="while-editing"
+            />
+            {!!historySearch && (
+              <TouchableOpacity onPress={() => setHistorySearch("")}>
+                <X size={16} color={colors.textMuted} />
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* Outcome & Club Filter Chips */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.chipsScroll}
+          >
+            {(["ALL", "WON", "LOST"] as const).map((out) => (
+              <TouchableOpacity
+                key={out}
+                style={[
+                  styles.chip,
+                  historyOutcome === out && styles.chipActive,
+                  historyOutcome === out && out === "WON" && styles.chipActiveWon,
+                  historyOutcome === out && out === "LOST" && styles.chipActiveLost
+                ]}
+                onPress={() => setHistoryOutcome(out)}
+              >
+                <Text
+                  style={[
+                    styles.chipText,
+                    historyOutcome === out && styles.chipTextActive,
+                    historyOutcome === out && out === "WON" && styles.chipWonText,
+                    historyOutcome === out && out === "LOST" && styles.chipLostText
+                  ]}
+                >
+                  {out === "ALL" ? "All Results" : out === "WON" ? "Wins Only" : "Losses Only"}
+                </Text>
+              </TouchableOpacity>
+            ))}
+
+            {playedClubs.length > 0 && (
+              <>
+                <View style={styles.chipDivider} />
+                <TouchableOpacity
+                  style={[styles.chip, historyClubId === "ALL" && styles.chipActive]}
+                  onPress={() => setHistoryClubId("ALL")}
+                >
+                  <Text style={[styles.chipText, historyClubId === "ALL" && styles.chipTextActive]}>
+                    All Clubs
+                  </Text>
+                </TouchableOpacity>
+                {playedClubs.map((c) => (
+                  <TouchableOpacity
+                    key={c.id}
+                    style={[styles.chip, historyClubId === c.id && styles.chipActive]}
+                    onPress={() => setHistoryClubId(c.id)}
+                  >
+                    <Text
+                      style={[styles.chipText, historyClubId === c.id && styles.chipTextActive]}
+                      numberOfLines={1}
+                    >
+                      {c.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </>
+            )}
+          </ScrollView>
+        </View>
+      )}
+
+      {tab === "history" ? (
+        isHistoryLoading ? (
+          <View style={styles.center}>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text style={styles.loadingText}>Loading match history...</Text>
+          </View>
+        ) : (
+          <FlatList
+            data={historyMatches}
+            keyExtractor={(item) => item.id}
+            renderItem={renderHistoryItem}
+            contentContainerStyle={styles.listContent}
+            refreshControl={
+              <RefreshControl
+                refreshing={isHistoryRefetching}
+                onRefresh={refetchHistory}
+                tintColor={colors.primary}
+              />
+            }
+            ListEmptyComponent={
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyTitle}>No match history found</Text>
+                <Text style={styles.emptySub}>
+                  {historySearch || historyClubId !== "ALL" || historyOutcome !== "ALL"
+                    ? "No matches match your current search or filters. Try clearing your filters."
+                    : "Games you play across all clubs will automatically be logged in your personal history."}
+                </Text>
+                {(historySearch || historyClubId !== "ALL" || historyOutcome !== "ALL") && (
+                  <TouchableOpacity
+                    style={styles.actionBtn}
+                    onPress={() => {
+                      setHistorySearch("");
+                      setHistoryClubId("ALL");
+                      setHistoryOutcome("ALL");
+                    }}
+                  >
+                    <Text style={styles.actionBtnText}>Reset Filters</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            }
+          />
+        )
+      ) : isLoading ? (
         <View style={styles.center}>
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={styles.loadingText}>Loading matches...</Text>
@@ -973,5 +1289,236 @@ const styles = StyleSheet.create({
     color: colors.textSubtle,
     fontSize: 10,
     textAlign: "center"
+  },
+  historyFiltersContainer: {
+    paddingHorizontal: 20,
+    marginBottom: 12,
+    gap: 8
+  },
+  historySearchBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: colors.inputBg,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    height: 42,
+    borderWidth: 1,
+    borderColor: colors.inputBorder
+  },
+  historySearchInput: {
+    flex: 1,
+    color: colors.text,
+    fontSize: 13,
+    paddingVertical: 0
+  },
+  chipsScroll: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 2
+  },
+  chip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.cardBorder
+  },
+  chipActive: {
+    backgroundColor: colors.primaryLight,
+    borderColor: colors.primary
+  },
+  chipActiveWon: {
+    backgroundColor: "rgba(22, 163, 74, 0.15)",
+    borderColor: "#16a34a"
+  },
+  chipActiveLost: {
+    backgroundColor: "rgba(220, 38, 38, 0.15)",
+    borderColor: "#dc2626"
+  },
+  chipText: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: colors.textMuted
+  },
+  chipTextActive: {
+    color: colors.primary,
+    fontWeight: "700"
+  },
+  chipWonText: {
+    color: "#16a34a"
+  },
+  chipLostText: {
+    color: "#dc2626"
+  },
+  chipDivider: {
+    width: 1,
+    height: 16,
+    backgroundColor: colors.cardBorder,
+    marginHorizontal: 4
+  },
+  historyCard: {
+    padding: 16,
+    gap: 12,
+    borderRadius: 16
+  },
+  historyCardHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center"
+  },
+  clubBadgeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    flex: 1,
+    marginRight: 8
+  },
+  historyClubName: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: colors.text,
+    flexShrink: 1
+  },
+  typeTag: {
+    backgroundColor: colors.cardElevated,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: colors.cardBorder
+  },
+  typeTagText: {
+    fontSize: 9,
+    fontWeight: "700",
+    color: colors.textMuted
+  },
+  historyBadgeGroup: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6
+  },
+  winBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "rgba(22, 163, 74, 0.15)",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "rgba(22, 163, 74, 0.3)"
+  },
+  winBadgeText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#16a34a"
+  },
+  lossBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "rgba(220, 38, 38, 0.15)",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "rgba(220, 38, 38, 0.3)"
+  },
+  lossBadgeText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#dc2626"
+  },
+  ratingChangeText: {
+    fontSize: 11,
+    fontWeight: "700"
+  },
+  ratingPositive: {
+    color: "#16a34a"
+  },
+  ratingNegative: {
+    color: "#dc2626"
+  },
+  matchupBox: {
+    backgroundColor: colors.cardElevated,
+    borderRadius: 12,
+    padding: 10,
+    gap: 8
+  },
+  historyTeamRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center"
+  },
+  historyTeamName: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: colors.text,
+    flex: 1
+  },
+  historyWinnerName: {
+    color: colors.primary,
+    fontWeight: "700"
+  },
+  historyScoreText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: colors.textMuted,
+    fontVariant: ["tabular-nums"]
+  },
+  winnerScoreText: {
+    color: colors.text,
+    fontWeight: "700"
+  },
+  historyDivider: {
+    height: 1,
+    backgroundColor: colors.cardBorder
+  },
+  historyCardFooter: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center"
+  },
+  historyFooterMeta: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    flex: 1
+  },
+  historyDateText: {
+    fontSize: 11,
+    color: colors.textMuted
+  },
+  setScoresPills: {
+    flexDirection: "row",
+    gap: 4
+  },
+  setScorePill: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    borderWidth: 1
+  },
+  setScorePillWon: {
+    backgroundColor: "rgba(22, 163, 74, 0.12)",
+    borderColor: "rgba(22, 163, 74, 0.3)"
+  },
+  setScorePillLost: {
+    backgroundColor: colors.card,
+    borderColor: colors.cardBorder
+  },
+  setScorePillText: {
+    fontSize: 10,
+    fontWeight: "700",
+    fontVariant: ["tabular-nums"]
+  },
+  setScoreWonText: {
+    color: "#16a34a"
+  },
+  setScoreLostText: {
+    color: colors.textMuted
   }
 });
